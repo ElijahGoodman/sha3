@@ -1,3 +1,7 @@
 # temporary MS Word files
 
 ~*.*
+
+# temporary LibreOffice files
+
+.~*
