@@ -2,9 +2,11 @@
 .*
 
 # temporary MS Word files
-
 ~*.*
 
 # temporary LibreOffice files
-
 .~*
+
+# Eclipse project files
+/Debug/
+/Release/
