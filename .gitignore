@@ -1,3 +1,6 @@
+# hidden files
+.*
+
 # temporary MS Word files
 
 ~*.*
