@@ -5,6 +5,7 @@
 //-----------------------------------------------------------------------------
 
 #include <iostream>
+#include <iomanip>
 #include <bit>		// !!! C++20 required
 #include <bitset>
 
@@ -36,13 +37,26 @@ inline void reset_bit(my_int* number, my_int bit)
 	*number &= ~bit;
 }
 
+
+//--------------------------------------------------
+inline void set_bit(uint64_t* number, my_int bit_number, bool value)
+{
+	uint64_t bit = static_cast<uint64_t>(1) << bit_number;
+
+	if (value)	*number |= bit;
+	else		*number &= ~bit;
+}
+
 //-----------------
 my_int rc(my_int t)
 {
-	my_int R = 0b10000000;
-	std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
+	if (0 == t % 255)
+		return 1;
 
-	for(my_int i=1; i <= t; i++) {
+	my_int R = 0b10000000;
+	// std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
+
+	for(my_int i=1; i <= t % 255; i++) {
 		R = R << 1;		// equivalent R = 0 || R;
 
 		my_int 	R8 = R & eighth_bit,
@@ -67,18 +81,25 @@ my_int rc(my_int t)
 
 		R = R & trunc_8bit;		// equivalent Trunc(8)[R]
 
-		std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
+		// std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
 	}
 
 	return (R & zero_bit);
 }
 
 //----------------------------------
-my_int round_constant(my_int rnd_index)
-{
-	unsigned long long RC(0);
+uint64_t round_constant(my_int rnd_index)
+{	
+	// Let w = 64,  l = 6, i.e. l = log2(w)
+	my_int l = 6;
+	uint64_t RC(0);
 
+	for (my_int j = 0; j <= l; j++) {
+		my_int bit_number = (1 << j) - 1;
+		set_bit(&RC, bit_number, rc(j + 7*rnd_index));
+	}
 
+	return RC;
 }
 
 
@@ -107,18 +128,18 @@ int main(int, char**)
 	my_int t = 8;
 	my_int res = rc(t);
 
-	std::cout << "Result: rc(" << t << ") = " << res << '\n';
+	std::cout << std::dec << "Result: rc(" << t << ") = " 
+			  << res << '\n';
 	std::cout << "----------------------\n";
+	std::cout << "Round index constants:\n";
 
-	my_int l = 24;
-	for(int j = 0; j < l; j++) {
-
-
-
+	for(my_int round_index = 0; round_index < 24; round_index++) {
+		std::cout << "round " << std::dec << std::setw(4) << round_index << ": ";
+		std::cout << "0x" << std::hex << std::setw(16) << std::setfill('0')
+				  << round_constant(round_index) << '\n';
 	}
 
-
-	return(0);
+	return(std::cout.fail());
 }
 
 
