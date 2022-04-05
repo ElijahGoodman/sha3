@@ -10,3 +10,9 @@
 # Eclipse project files
 /Debug/
 /Release/
+
+# MS Visual studio 2019 files
+*.sln
+*.vcxproj
+*.filters
+*.user
