@@ -53,11 +53,31 @@ my_int rc(my_int t)
 	if (0 == t % 255)
 		return 1;
 
-	my_int R = 0b10000000;
-	// std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
+	std::bitset<9> R{0b000000001};
+
+//	std::cout << R << '\n';
+
+	for(my_int i=1; i <= t%255; i++) {
+		R <<= 1;	// equivalent R = 0 || R
+
+	//	std::cout << R << '\n';
+
+		R[0] = R[0] xor R[8];
+		R[4] = R[4] xor R[8];
+		R[5] = R[5] xor R[8];
+		R[6] = R[6] xor R[8];
+
+		R[8] = false;
+	}
+
+	return R[0];
+
+/*
+	my_int R = 0b00000001;
 
 	for(my_int i=1; i <= t % 255; i++) {
 		R = R << 1;		// equivalent R = 0 || R;
+//		std::cout << std::hex << R << " | " << std::bitset<8>(R) << '\n';
 
 		my_int 	R8 = R & eighth_bit,
 				R0 = R & zero_bit, R4 = R & fourth_bit,
@@ -85,6 +105,7 @@ my_int rc(my_int t)
 	}
 
 	return (R & zero_bit);
+*/
 }
 
 //----------------------------------
@@ -124,20 +145,34 @@ int main(int, char**)
 	else
 		std::cout << "mixed-endian\n";
 	*/
+/*
+	for (my_int t = 0; t < 7; t++) {
+		my_int res = rc(t);
 
-	my_int t = 8;
-	my_int res = rc(t);
-
-	std::cout << std::dec << "Result: rc(" << t << ") = " 
-			  << res << '\n';
+		std::cout << std::dec << "Result: rc(" << t << ") = "
+				<< res << '\n';
+	}
+*/
+/*
 	std::cout << "----------------------\n";
 	std::cout << "Round index constants:\n";
 
 	for(my_int round_index = 0; round_index < 24; round_index++) {
 		std::cout << "round " << std::dec << std::setw(4) << round_index << ": ";
-		std::cout << "0x" << std::hex << std::setw(16) << std::setfill('0')
-				  << round_constant(round_index) << '\n';
+		std::cout << "0x" << std::hex << std::uppercase << std::setw(16)
+				  << std::setfill('0') << round_constant(round_index) << '\n';
 	}
+*/
+
+	for(int i = 0; i < 5; i++) {
+		for(int j = 0; j < 5; j++) {
+			int new_i = (i + 3*j) % 5;
+			int new_j = i;
+			std::cout << "(" << i << ", " << j << ") <-- ";
+			std::cout << "(" << new_i << ", " << new_j << ")\n";
+		}
+	}
+
 
 	return(std::cout.fail());
 }
