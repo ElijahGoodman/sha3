@@ -8,11 +8,16 @@
 .~*
 
 # Eclipse project files
-/Debug/
-/Release/
+[Dd]ebug/
+[Rr]elease/
 
 # MS Visual studio 2019 files
 *.sln
 *.vcxproj
 *.filters
 *.user
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
