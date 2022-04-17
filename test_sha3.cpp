@@ -63,6 +63,18 @@ int modulo(int num, int denom)
 	return( (rem >= 0) ? rem : (std::abs(denom) - std::abs(rem)) );
 }
 
+// --- Cycled shift number left
+inline int_type cycled_shift_right(int_type number, size_type offset)
+{
+	return ((number << offset) | (number >> (BITS_IN_8_BYTES - offset)));
+}
+
+// --- Cycled shift number right
+inline int_type cycled_shift_left(int_type number, size_type offset)
+{
+	return ((number >> offset) | (number << (BITS_IN_8_BYTES - offset)));
+}
+
 // --- Transform string like "1011101..." to integer FIPS PUB 202 Algorithm 11.
 int_type b2h(std::string::const_iterator start,
 			 std::string::const_iterator end)
@@ -91,6 +103,21 @@ void print_vector(const std::vector<int_type>& data, const std::string& title)
 	std::cout << "-------------------\n";
 }
 
+// --- Print State ---		// for debugging
+void print_state(const std::vector<int_type>& data, const std::string& title)
+{
+	std::cout << title;
+	std::cout << std::setfill('0');
+	for(int i = 0; i < 5; i++) {
+		for (int j = 0; j < 5; j++) {
+			std::cout << std::dec << "[" << j << ", " << i << "] = "
+				<< std::hex  << std::uppercase
+				<< std::setw(sizeof(int_type) * 2) << data[5*i + j] << '\n';
+		}
+	}
+	std::cout << "-------------------\n";
+}
+
 
 //==============================================================================
 // input data structure -- vector of <int_type> values
@@ -100,37 +127,40 @@ public:
 	InputData(const std::string &str)
 	: input_str(str)
 	{
+		initialization();
 	}
 
 	// Initialization
-	void initialization(const std::string &input_str)
+	void initialization()
 	{
-		this->len_in_bits = input_str.length();
+		this->len_in_bits = this->input_str.length();
 		this->modified_size_in_bits = this->len_in_bits + SUFFIX_LENGTH;
-		int temp = len_in_bits / BITS_IN_BYTE;
-		len_in_bytes = (len_in_bits % BITS_IN_BYTE) ? (temp + 1) : temp; // len(M) = 8*m
+		int temp = this->len_in_bits / BITS_IN_BYTE;
+		this->len_in_bytes = (this->len_in_bits % BITS_IN_BYTE) ? (temp + 1) : temp;
 
 		// debugging
-	//	std::cout << "\nlen_in_bits = " << len_in_bits << " | len_in_bytes = "
-	//			  << len_in_bytes << "\n";
+		std::cout << "len_in_bits = " << len_in_bits << " | len_in_bytes = "
+				  << len_in_bytes << "\n";
 	//	std::cout << "len with suffix: " << this->modified_size_in_bits << '\n';
 
 		// determine the required size of the input data.
 		//  ---- first, determine number of bits to padding
-		bits_to_padding = modulo(-this->modified_size_in_bits - PADDING_ONES,
+		this->bits_to_padding = modulo(-this->modified_size_in_bits - PADDING_ONES,
 								 rate*BITS_IN_BYTE);
-		bits_to_padding += PADDING_ONES;	// additionally take into account two digits "11"
+		// additionally take into account two digits "11"
+		this->bits_to_padding += PADDING_ONES;
 
-		bytes_to_padding = bits_to_padding / BITS_IN_BYTE;
-		bytes_to_padding += (bits_to_padding % BITS_IN_BYTE) ? 1 : 0;
+		this->bytes_to_padding = this->bits_to_padding / BITS_IN_BYTE;
+		this->bytes_to_padding += (this->bits_to_padding % BITS_IN_BYTE) ? 1 : 0;
 
 	//	std::cout << "Required " << bits_to_padding << " bits to padding\n";
 	//	std::cout << "// Required " << bytes_to_padding << " bytes to padding\n";
 
 		// reserve required size of the input data (resize vector and fill it by '0'-s)
-		data_size = (len_in_bits + SUFFIX_LENGTH + bits_to_padding) / BITS_IN_8_BYTES;
-		data.reserve(data_size);
-		data.resize(data_size, 0);
+		this->data_size = (this->len_in_bits + SUFFIX_LENGTH + this->bits_to_padding) /
+						  BITS_IN_8_BYTES;
+		this->data.reserve(this->data_size);
+		this->data.resize(this->data_size, 0);
 
 	//	std::cout << "\nSize of input data array: " << data_size << '\n';
 
@@ -147,7 +177,7 @@ public:
 		domain_separation_and_padding();
 
 		std::cout << "\n";
-		print_data();
+		//print_data();
 		//print_data1();
 	}
 
@@ -251,7 +281,7 @@ public:
 
 	// --------------
 	size_type size() const {  return data_size; }
-	std::vector<int_type> get_data() const { return std::move(data); }
+	std::vector<int_type> get_data() const { return data; }
 
 public:
 	std::string input_str;
@@ -259,7 +289,7 @@ public:
 	size_type data_size;
 	size_type len_in_bits;
 	size_type bits_to_padding;
-	size_type modified_size_in_bits;	// data size after appending
+	int modified_size_in_bits;	// data size after appending
 
 public:								// temporary variable
 	size_type len_in_bytes;			// what for?
@@ -271,23 +301,43 @@ public:								// temporary variable
 //==== SHA3 FUNCTIONS ====
 //==============================================================================
 // --- KECCAK-p Permutation ---
-void KECCAK_p(std::vector<int_type> &state, const std::vector<int_type> data)
+void KECCAK_p(std::vector<int_type> &state)
 {
+	// !!!!!!!!!!!!!! WORK IN PROGRESS !!!!!!!!!!!!!!!!!!!!!!!!!
+	
+	
+	// 1. THETA
+	std::vector<int_type> theta_state_left(5, 0);
+	std::vector<int_type> theta_state_right(5, 0);
 
+	for (int i = 0; i < 5; i++) {
+		for (int j = 0; j < 5; j++) {
+			theta_state_left[j] = theta_state_left[j] ^ state[i*5 + j];
+			theta_state_right[j] = theta_state_right[j] ^ 
+									cycled_shift_left(state[i*5 + j], 1);
+		}
+	}
+
+	for (int i = 0; i < 5; i++) {
+		for (int j = 0; j < 5; j++) {
+			state[i * 5 + j] = state[i * 5 + j] ^
+							   theta_state_left[modulo(i - 1, 5)] ^
+							   theta_state_right[modulo(i + 1, 5)];
+		}
+	}
+
+	print_state(state, "State after THETA:\n");
 
 	return;
 } // end KECCAK_p()
 
+
 // --- XOR State and Data
 void State_XOR_Data(std::vector<int_type> &state, const std::vector<int_type> data)
 {
-	int temp = rate / w;
-	for(int i = 0; i < temp; i++) {
+	for(int i = 0; i < rate / w; i++) {
 		state[i] = state[i] ^ data[i];
 
-	}
-	for(int i = temp; i < (b / w); i++ ) {
-		state[i] = state[i] ^ 0;
 	}
 
 	return;
@@ -301,12 +351,12 @@ void Sponge(std::vector<int_type> &state, const std::vector<int_type> data)
 
 	State_XOR_Data(state, data);
 
-	print_vector(state, "State:\n");		// debugging
+	print_state(state, "State:\n");		// debugging
 
 	for(int i = 0; i < rounds_count; i++) {
 
 
-		KECCAK_p(state, data);
+		KECCAK_p(state);
 
 
 
@@ -403,7 +453,6 @@ int main(int, char* [])
 
 	// Setup input data from input string
 	InputData input_data(input_str);
-	input_data.initialization(input_str);
 
 	Sponge(State, input_data.get_data());
 
