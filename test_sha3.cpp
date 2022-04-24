@@ -34,6 +34,8 @@ const int BITS_IN_BYTE = 8;
 const int BYTES_IN_INT64 = 8;
 const int PADDING_ONES = 2; 	// Two bits of padding which always must been "11"
 const bool BIT_ORIENTED = true;
+const int_type SHA3_PADD = 0b110;			// Paddings for SHA3 and SHAKE
+const int_type SHAKE_PADD = 0b11111;
 
 //const size_type digest_length = 32;	    // i.e.;  digest (hash) length in bytes
 //constexpr size_type capacity = 64;		// in bytes
@@ -44,12 +46,14 @@ const bool BIT_ORIENTED = true;
 struct sha3_param
 {
 public:
-	sha3_param(int d_len = 32, int c = 64, int suf_len = 2, bool bit_byte = false)
+	sha3_param(int d_len = 32, int c = 64, int suf_len = 2, 
+			   bool bit_byte = false, int_type p = 0b110)
 	: digest_length(d_len),
 	  rate(b-c),
 	  capacity(c),
 	  suffix_length(suf_len),
-	  bit_oriented(bit_byte)
+	  bit_oriented(bit_byte),
+	  padd(p)
 	{	// By default - SHA3_256 (digest=256, capacity=512, suffix = "10")
 	}
 
@@ -59,6 +63,7 @@ public:
 	int capacity;
 	int suffix_length;
 	bool bit_oriented;
+	int_type padd;
 };
 
 const int_type array_of_ones[64] = {
@@ -282,6 +287,7 @@ public:
 	{
 		std::cout << "Input string:\n";
 		std::cout << input_str << "\n";
+		std::cout << "Length in bit: " << std::dec << this->len_in_bits << '\n';
 
 		// !!!! Input string must been 2*m size (m - integer) !!!!
 
@@ -292,17 +298,11 @@ public:
 		}
 
 		std::cout << "Size = " << std::dec << raw_data.size() << "\n";
-		print_data_raw(raw_data, "Raw input data:\n");
+		//print_data_raw(raw_data, "Raw input data:\n");
 
 		this->modified_size_in_bits = this->len_in_bits + param.suffix_length;
 		int temp = this->len_in_bits / BITS_IN_BYTE;
 		this->len_in_bytes = (this->len_in_bits % BITS_IN_BYTE) ? (temp + 1) : temp;
-
-		// debugging
-		std::cout << std::dec
-				  << "len_in_bits = " << len_in_bits << " | len_in_bytes = "
-				  << len_in_bytes << "\n";
-	//	std::cout << "len with suffix: " << this->modified_size_in_bits << '\n';
 
 		// determine the required size of the input data.
 		//  ---- first, determine number of bits to padding
@@ -323,11 +323,14 @@ public:
 		this->data.reserve(this->data_size);
 		this->data.resize(this->data_size, 0);
 
-		std::cout << "Size of vector<int_type> = " << data.size() << "\n";
+		std::cout << "Size of vector<int_type> = " << std::dec << data.size() << "\n";
 
 		convert_raw_data();
+		//print_data();
 
-		print_data();
+		domain_separation_and_padding(param);
+
+		//print_data();
 	}
 
 	// Convert raw data (vector<byte>) to vector<int_type>
@@ -339,7 +342,6 @@ public:
 			data[j] |= temp;
 		}
 	}
-
 
 
 	// Initialization
@@ -398,53 +400,25 @@ public:
 	// domain separation and padding rule
 	void domain_separation_and_padding(const sha3_param &param)
 	{
-		// ------------ adding suffix for domain separation
-		// determine the bit & byte number after which we must to add a suffix
-		int current_bit = (this->len_in_bits % BITS_IN_8_BYTES) - 1;
-		int current_lane = this->len_in_bits / BITS_IN_8_BYTES;
+		int cur_lane = this->len_in_bits / (BITS_IN_BYTE * BYTES_IN_INT64);
+		int cur_bit = this->len_in_bits % (BITS_IN_BYTE * BYTES_IN_INT64);
 
-	//	std::cout << "\nLast message byte " << current_lane << ' '
-	//			  << " bit #" << current_bit << "\n\n";
 
-		current_bit += param.suffix_length;
-		current_lane += (current_bit >= BITS_IN_8_BYTES) ? 1 : 0;
-		current_bit = current_bit % BITS_IN_8_BYTES;		// truncate
+		std::cout << "Current lane: " << std::dec << cur_lane << "\n";
+		std::cout << "Current bit: " << std::dec << cur_bit << "\n";
 
-	//	std::cout << "Suffix appends in lane " << current_lane << ' '
-	//			  << " In placed bit #" << current_bit << '\n';
-
-		if(param.suffix_length == 2) {		// for SHA3 functions
-			this->data[current_lane] |= array_of_ones[current_bit]; // M || 01
-		}
-		if(param.suffix_length == 4) {		// for SHAKE functions
-			this->data[current_lane] |= array_of_ones[current_bit-3] |
-										array_of_ones[current_bit-2] |
-										array_of_ones[current_bit-1] |
-										array_of_ones[current_bit];
+		// add suffix and first bit of padding
+		data[cur_lane] |= param.padd << cur_bit;;
+		
+		// if total size > 64 bit, i.e. we have an overflow
+		int overflow = (cur_bit + param.suffix_length + 1) - BITS_IN_8_BYTES;
+		//std::cout << "Overflow: " << std::dec << overflow << "\n";
+		if (overflow > 0) {
+			data[cur_lane + 1] = param.padd >> (param.suffix_length + 1 - overflow);
 		}
 
-		// ------------- add padding (if needed !!!)
-		if(this->bits_to_padding) {			/// ALWAYS NEED PADDING !!!
-			current_bit += 1;
-			current_lane += (current_bit >= BITS_IN_8_BYTES) ? 1 : 0;
-			current_bit = current_bit % BITS_IN_8_BYTES;		// truncate
-
-		//	std::cout << "First padding bit in lane " << current_lane << ' '
-		//			  << " In placed bit #" << current_bit << '\n';
-
-			// add first bit ( 1 )
-			this->data[current_lane] |= array_of_ones[current_bit];
-
-			// == intermediate bits are already equal to 0 ==
-
-			// add last bit ( 1 )
-			this->data[this->data_size-1] |= array_of_ones[63]; // 0x1000000000000000
-
-			// save modified size
-			this->modified_size_in_bits += this->bits_to_padding;
-			// debugging
-		//	std::cout << "modified_size_in_bits = " << this->modified_size_in_bits << '\n';
-		}
+		// add last byte of padding
+		this->data[this->data_size - 1] |= array_of_ones[63]; // 0x1000000000000000
 	}
 
 	// --- Transform input string (in bits) to the array of integers ---
@@ -674,42 +648,79 @@ int main(int, char* [])
 
 	// ------------------
 	// Input data -- hexadecimal strings
-	std::map<std::string, int> input_strings {
-		{"00", 0},				// MSG 0 bit
-		{"13", 5},				// MSG 5 bits
-		{"53587B19", 30},		// MSG 30 bits
+	std::map<int, std::string> input_strings {
+		{0, "00"},				// MSG 0 bit
+		{5, "13"},				// MSG 5 bits
+		{30, "53587B19"},		// MSG 30 bits
 		// MSG 1600 bits
-		{"A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+		{1600, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
-A3A3A3A3A3A3A3A3", 1600},
+A3A3A3A3A3A3A3A3"},
 		// MSG 1605 bits
-		{"A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+		{1605, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
-A3A3A3A3A3A3A3A303", 1605},
+A3A3A3A3A3A3A3A303"},
 		// MSG 1630 bits
-	{"A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+		{1630, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
 A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
-A3A3A3A3A3A3A3A3A3A3A323", 1630}
+A3A3A3A3A3A3A3A3A3A3A323"},
+		// MSG 1088 bits
+		{1088, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3"},
+		// MSG 1087 bits
+		{1087, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A323"},
+		// MSG 1086 bits
+		{1086, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A323"},
+		// MSG 1085 bits
+		{1085, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A303"},
+		// MSG 1084 bits
+		{1084, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A303"},
+		// MSG 1083 bits
+		{1083, "A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3\
+A3A3A3A3A3A3A303"}
 	};
 
-	sha3_param param{28, 56, 2, BIT_ORIENTED};	// SHA3-224
-	//sha3_param param{};					// {32, 64, 2, bit_oriented} SHA3-256
-	//sha3_param param{48, 96, 2, BIT_ORIENTED};	// SHA3-384
-	//sha3_param param{64, 128, 2, BIT_ORIENTED};	// SHA3-512
-	//sha3_param param{512, 32, 4, BIT_ORIENTED};	// SHAKE128
-	//sha3_param param{512, 64, 4, BIT_ORIENTED};	// SHAKE256
+
+	//sha3_param param{28, 56, 2, BIT_ORIENTED, 0b110};		// SHA3-224
+	//sha3_param param{};								// {32, 64, 2, bit_oriented} SHA3-256
+	//sha3_param param{48, 96, 2, BIT_ORIENTED, 0b110};		// SHA3-384
+	//sha3_param param{64, 128, 2, BIT_ORIENTED, 0b110};	// SHA3-512
+	//sha3_param param{512, 32, 4, BIT_ORIENTED, 0b11111};	// SHAKE128
+	sha3_param param{512, 64, 4, BIT_ORIENTED, 0b11111};	// SHAKE256
 
 	std::cout << "SHA3 Initial parameters:" << "\n-------------------\n";
 	std::cout << "Digest - " << param.digest_length * 8 << '\n';
@@ -719,12 +730,12 @@ A3A3A3A3A3A3A3A3A3A3A323", 1630}
 
 	// Setup input data from input string
 	//for(const std::pair<const std::string, int> &input_str : input_strings) {
-	for(const std::pair<std::string, int> &input_str : input_strings) {
+	for(const std::pair<int, std::string> &input_str : input_strings) {
 	//{
 		//std::string input_str = input_strings[1];
 		//std::cout << "Input data: " << input_str << "\n-------------------\n";
 
-		InputData input_data(input_str.first, input_str.second);
+		InputData input_data(input_str.second, input_str.first);
 		input_data.data_convertion(param);
 		//print_modified_data_raw(input_data.get_data(), "Input data:\n");
 
@@ -732,9 +743,9 @@ A3A3A3A3A3A3A3A3A3A3A323", 1630}
 		// Initial State -- array 5 * 5 * w,  all values are 0-s
 		std::vector<int_type> State(5 * 5, 0);
 
-//		Sponge(State, input_data.get_data(), param);
+		Sponge(State, input_data.get_data(), param);
 
-		std::cout << "\n-------------------\n";
+		std::cout << "\n\n===================\n";
 	}
 
 	std::cout << "\n-------------------\n" << "End.\n";
