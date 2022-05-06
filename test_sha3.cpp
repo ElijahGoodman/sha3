@@ -648,15 +648,15 @@ int main(int, char* [])
 {
 	std::cout << "Check connection...\n";
 
-	//sha3::keccak_p obj(256, sha3::SHA3_DOMAIN);
-	chash::keccak obj(256);
+	//std::cout << std::hex << (0x00000000000000FF << 8) << " " << (0x00000000000000FF << 16);
+
 
 	// Input data -- hexadecimal strings
 	std::map<int, std::string> input_strings {
-		{0, ""},				// MSG 0 bit
-		{5, ""},				// MSG 5 bits
+//		{0, ""},				// MSG 0 bit
+//		{5, ""},				// MSG 5 bits
 		{30, "SX{"},		// MSG 30 bits
-		// MSG 1600 bits
+/*		// MSG 1600 bits
 		{1600, "£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
 £££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
 ££££££££££££££££££££££££££££££££££££££££££££££££££££££££££"},
@@ -667,7 +667,10 @@ int main(int, char* [])
 		// MSG 1630 bits
 		{1630, "£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
 £££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
-£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££#"},
+£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££#"}
+//		{344, "The quick brown fox jumps over the lazy dog"},
+//		{352, "The quick brown fox jumps over the lazy dog."}
+		/*
 		// MSG 1088 bits
 		{1088, "£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
 £££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££"},
@@ -686,17 +689,47 @@ int main(int, char* [])
 		// MSG 1083 bits
 		{1083, "£££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££\
 ££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££"}
+		*/
 	};
 
-	//auto md = obj.MD(input_strings[0], 0);
-	auto md = obj.MD(input_strings[5], 5);
-	//auto md = obj.MD(input_strings[30], 30);
 
-	std::cout << std::hex;
-	for(const auto c : md) {
-		std::cout << std::setw(2) << std::setfill('0') << (int)c << " ";
+	chash::size_t digest_size = 32;
+	chash::size_t capacity = 64;
+	chash::int_t sha3_domain = chash::SHA3_DOMAIN;
+	//chash::int_t sha3_domain = chash:: SHAKE_DOMAIN;
+
+	//sha3::keccak_p obj(32, 32*2, sha3::SHA3_DOMAIN);
+	//chash::keccak obj(32, 32*2);
+	chash::keccak obj(digest_size, capacity, sha3_domain);
+
+	std::cout << (sha3_domain == chash::SHA3_DOMAIN ? "SHA3-" : "SHAKE-")
+			<< digest_size << "\n\n";
+
+	for(const std::pair<int, std::string> &input_str : input_strings) {
+		//std::string input_str = input_strings[1630];
+	 	std::cout << "-------------------\n";
+		std::cout << "Input data (message length = " << std::dec
+				<< input_str.first << "):\n" << input_str.second << "\n";
+		//std::cout << "Input data: " << input_str << "\n\n";
+
+		//auto md = obj.MD(input_strings[0], 0);
+		//auto md = obj.MD(input_strings[30], 30);
+		//auto md = obj.MD(input_str, 1630);
+
+		auto md = obj.MD(input_str.second, input_str.first);
+
+
+		int i = 0;
+		std::cout << "Message digest:\n" << std::hex;
+		for(const auto c : md) {
+			std::cout << std::setw(2) << std::setfill('0') << std::uppercase
+					  << (int)c << " ";
+			if(!((i+1)%16))
+						std::cout << '\n';
+			i++;
+		}
+		std::cout << "\n";
 	}
-	std::cout << "\n";
 
 	//std::copy(md.begin(), md.end(), std::ostream_iterator<int>(std::cout, " "));
 

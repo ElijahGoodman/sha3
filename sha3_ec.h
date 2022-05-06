@@ -14,6 +14,7 @@
 
 //----- DEFINES -----
 
+
 //------------------------------------------------------------------------------
 namespace chash
 {
@@ -23,17 +24,85 @@ namespace chash
 	typedef unsigned char 		byte;
 	using vec_iter = std::vector<int_t>::const_iterator;
 
+	// --- Print State ---		// for debugging
+	void print_state(const int_t data[25], const std::string& title)
+	{
+		std::cout << title;
+		std::cout << std::setfill('0');
+		for(int y = 0; y < 5; y++) {
+			for (int x = 0; x < 5; x++) {
+				std::cout << std::dec << "[" << x << ", " << y << "] = "
+					<< std::hex  << std::nouppercase
+					<< std::setw(sizeof(int_t) * 2) << data[x + y*5] << '\n';
+			}
+		}
+		std::cout << "-------------------\n" << std::dec;
+	}
+
+	// --- Print State ---		// for debugging
+	void print_state_raw(const std::vector<int_t>& state, const std::string& title)
+	{
+		std::cout << title << std::hex;
+
+		int i=0;
+		for(int x = 0; x < 5; x++) {
+			for(int y = 0; y < 5; y++) {
+				int_t lane = state[x*5 + y];
+				unsigned char *c = reinterpret_cast<unsigned char*>(&lane);
+				for(int i = 0; i < sizeof(int_t); i++) {
+					std::cout << std::setw(2) << std::setfill('0') << std::uppercase
+							  << static_cast<unsigned int>(c[i]) << ' ';
+				}
+				if(i%2)
+					std::cout << '\n';
+				i++;
+			}
+		}
+		std::cout << "\n-------------------\n" << std::dec;
+	}
+
+	// --- Print vector<int> in hexadecimal form ---		// for debugging
+	void print_data_raw(const std::vector<int_t>& data, const std::string& title)
+	{
+		std::cout << title << std::hex;
+		for(const int_t number : data ) {
+			for(int i = 0; i < sizeof(int_t); i++) {
+				int temp = (number >> (i*8)) & 0xFF;
+				std::cout << std::setw(2) << std::setfill('0') << std::uppercase
+					   << temp << " ";
+			}
+		}
+		std::cout << "\n-------------------\n" << std::dec;
+	}
+
+	// --- Print vector ---		// for debugging
+	void print_vector(const std::vector<int_t>& data, const std::string& title)
+	{
+		std::cout << title;
+		std::cout << std::setfill('0');
+		int i=0;
+		for(int_t word : data) {
+			std::cout << std::dec << std::setw(3) << i << ' ' << std::hex
+					  << std::uppercase << std::setfill('0')
+					  << std::setw(sizeof(int_t) * 2) << word << '\n';
+			i++;
+		}
+		std::cout << "-------------------\n" << std::dec;
+	}
+
 	//----- CONSTANTS -----
-	static const int_t SHA3_DOMAIN = 0b110;
-	static const int_t SHAKE_DOMAIN = 0b11111;
+	const int_t SHA3_DOMAIN = 0b110;
+	const int_t SHAKE_DOMAIN = 0b11111;
 
 	static const int_t EIGHT_BITS = 8;
 	static const int_t EIGHT_BYTES = 8;
 	static constexpr int_t W = sizeof(int_t) * EIGHT_BITS; 	// must been 64 :)
 
+	const size_t MAX_HASH_SIZE = 65535;	// Max digest size in bytes
 	static const size_t STATE_SIZE = 25;
 	static const size_t KECCAK_WIDTH = 200;	// in bytes
-	static const size_t rounds_count = 24;
+	static const size_t rounds_count = 24;	// in bytes
+	static const size_t DEF_CAPACITY = 64;	// in bytes
 
 	static constexpr size_t rho_off[25] = {	// offsets for RHO step mapping
 		    0,   1%W, 190%W,  28%W,  91% W,
@@ -71,15 +140,17 @@ namespace chash
 		keccak& operator=(keccak&&) = delete;
 
 		//-----------------------------------------------------
-		explicit keccak(size_t d_size, int_t dom = SHA3_DOMAIN)
-		{	// d_size
-			digest_size = (d_size >= KECCAK_WIDTH) ? 32 : d_size;
-			capacity = digest_size*2;
+		explicit keccak(size_t d_size, size_t cap, int_t dom = SHA3_DOMAIN)
+		{	// <d_size> - in bytes, <cap> - in bytes
+			digest_size = (d_size <= MAX_HASH_SIZE) ? d_size : MAX_HASH_SIZE;
+			capacity = (0 <= cap and cap <= KECCAK_WIDTH) ? cap : DEF_CAPACITY;
 			rate = KECCAK_WIDTH - capacity;
 			rounds = rounds_count;
 			domain = dom;
+
 			if(dom == SHA3_DOMAIN)			suff_len = 2;
 			else if(dom == SHAKE_DOMAIN)	suff_len = 4;
+
 			reset_state();
 		}
 
@@ -92,13 +163,6 @@ namespace chash
 			if(msg.size()*EIGHT_BITS < len_in_bits)
 				len_in_bits = msg.size() * EIGHT_BITS;
 
-			std::cout << "Message (length = " << len_in_bits << "):\n";
-			for(int i=0; i<msg.length(); i++) {
-				std::cout << std::hex << std::setfill('0') << std::setw(2)
-						<< (int)msg[i] << ' ';
-			}
-			std::cout << std::dec << "\n";
-
 			// 1. Preparing input data
 			std::vector<int_t> data;
 			const int_t obligatory_pad = 2;	// in PAD(10*1) obligatory add "11"
@@ -110,11 +174,13 @@ namespace chash
 			data.reserve(total_len / W);
 			data.resize(total_len / W, 0);
 
-			for(int i = 0; i < msg.size(); i++) {
-				int j = i/W;
-				int_t tmp = static_cast<int_t>(msg[i]) << ((i%EIGHT_BYTES)*EIGHT_BYTES);
-				data[j] |= tmp;
+			for(size_t i = 0; i < msg.size(); i++) {
+				size_t j = i/EIGHT_BYTES;
+				data[j] |= static_cast<int_t>(0xFFULL & msg[i]) << ((i%EIGHT_BYTES)*EIGHT_BYTES);
 			}
+
+			//print_vector(data, "Input data:\n");
+			//print_data_raw(data, "Input data:\n");
 
 			// domain separation and padding
 			int_t cur_lane = len_in_bits / W;
@@ -126,9 +192,14 @@ namespace chash
 				data[cur_lane + 1] = domain >> (suff_len + 1 - overflow);
 			}
 			// add last byte of padding
-			data[data.size() - 1] |= 0x1000000000000000ULL;
+			data[data.size() - 1] |= 0x8000000000000000ULL;
+
+			//print_vector(data, "Data after padding:\n");
+			//print_data_raw(data, "Data after padding:\n");
+
 
 			// 2. Absorbing
+			reset_state();
 			absorbing(data);
 
 			// 3. Squeezing and return
@@ -181,9 +252,21 @@ namespace chash
 		} // end round_permutation()
 
 		//--------------------------------------------
+		void absorbing(const byte *start, const byte *end, size_t size)
+		{	// Absorbing part of input [start, end] with state array
+			for(const byte* cur = start; cur != end; cur++)
+				st_raw[cur - start] ^= *cur;
+			if(size < rate) {
+
+
+			}
+			keccap_p();
+		} // end absorbing()
+
+
+		//--------------------------------------------
 		void absorbing(const std::vector<int_t> &data) noexcept
 		{	// Absorbing input data with state array
-			reset_state();
 			const int absorp_num = data.size() * EIGHT_BYTES / rate;
 			const int cur_block_size = rate / EIGHT_BYTES;
 
@@ -205,9 +288,7 @@ namespace chash
 			for(size_t i = 0; i < (digest_size/rate + 1); i++) {
 				size_t n_to_squee = std::min((digest_size - squee_out), rate);
 				for(size_t j = squee_out; j < squee_out + n_to_squee; j++)
-				{
-					digest[j - squee_out] = st_raw[j];
-				}
+					digest[j] = st_raw[j - squee_out];
 				squee_out += n_to_squee;
 
 				if(squee_out < digest_size)
