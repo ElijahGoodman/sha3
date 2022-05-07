@@ -1,29 +1,29 @@
 ///===== INPUT ========
 /// Hexadecimal string,  Reverse byte order
 // MSG 0 bits
-00
+""
 
 // MSG 5 bits
-13
+""
 
 // MSG 30 bits
-53587B19
+"SX{"
 
 // MSG 1600 bits
-A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3
+"ЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈ"
 
 // MSG 1605 bits
-A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A303
+"ЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈ"
 
 // MSG 1630 bits
-A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A3A323
+"ЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈЈ#"
 
-
+//=================================================
 ///===== SHA3-224 =====
 // SHA3-224(M) = KECCAK[448](M || 01, 224)
 // digest = 224 bits = 28 bytes
 // capacity = 448 bits = 56 bytes
-// rate = 1152 bits = 144 bytes		18 __int64 words
+// rate = 1152 bits = 144 bytes	   18 __int64 words
 
 SHA3-224_Msg0
 	Hash val is
@@ -61,7 +61,7 @@ SHA3-224_Msg1630
 // SHA3-256(M) = KECCAK[512](M || 01, 256)
 // digest = 256 bits = 32 bytes
 // capacity = 512 bits = 64 bytes
-// rate = 1088 bits = 136 bytes		17 __int64 words
+// rate = 1088 bits = 136 bytes	   17 __int64 words
 	
 SHA3-256_Msg0
 	Hash val is
@@ -98,7 +98,7 @@ SHA3-256_Msg1630
 // SHA3-384(M) = KECCAK[768](M || 01, 384)
 // digest = 384 bits = 48 bytes
 // capacity = 768 bits = 96 bytes
-// rate = 832 bits = 104 bytes			13 __int64 words	
+// rate = 832 bits = 104 bytes	   13 __int64 words	
 	
 SHA3-384_Msg0
 	Hash val is
@@ -141,7 +141,7 @@ SHA3-384_Msg1630
 // SHA3-512(M) = KECCAK[1024](M || 01, 512)
 // digest = 512 bits = 64 bytes
 // capacity = 1024 bits = 128 bytes
-// rate = 576 bits = 72 bytes			9 __int64 words	
+// rate = 576 bits = 72 bytes		9 __int64 words	
 	
 SHA3-512_Msg0
 	Hash val is
@@ -189,9 +189,9 @@ SHA3-512_Msg1630
 //=================================================
 //===== SHAKE-128 =====
 // SHAKE128(M, d) = KECCAK[256](M || 1111, d)
-// digest = 4096 bits = 512 bytes		... for this examples
+// digest = 4096 bits = 512 bytes	... for this examples
 // capacity = 256 bits = 32 bytes
-// rate = 1344 bits = 168 bytes			21 __int64 words	
+// rate = 1344 bits = 168 bytes		21 __int64 words	
 	
 SHAKE128_Msg0
 	Output val is
@@ -404,12 +404,11 @@ SHAKE128_Msg1630
 	B0 26 CE DD 57 59 5B 1A B6 FE 88 A7 84 BE 0C 06 
 
 //=================================================
-//===== SHAKE256 =====
-//===== SHAKE-128 =====
+//===== SHAKE-256 =====
 // SHAKE256(M, d) = KECCAK[512](M || 1111, d)
-// digest = 4096 bits = 512 bytes		... for this examples
+// digest = 4096 bits = 512 bytes	... for this examples
 // capacity = 512 bits = 64 bytes
-// rate = 1088 bits = 136 bytes			17 __int64 words	
+// rate = 1088 bits = 136 bytes		17 __int64 words	
 
 SHAKE256_Msg0
 	Output val is
