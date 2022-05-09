@@ -5,6 +5,8 @@
 
 //==============================================================================
 
+#include "sha3_ec.h"
+
 #include <iostream>
 #include <iomanip>
 #include <cstdlib>
@@ -16,8 +18,6 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
-
-#include "sha3_ec.h"
 
 //==============================================================================
 //=== FACILITIES ===
@@ -74,41 +74,12 @@ int main(int, char* [])
 */		
 	};
 
-/*
-	const chash::size_t digest_size = 224;				// SHA3-224
-	const chash::size_t capacity = 448;
-	const chash::int_t sha3_domain = chash::kSHA3_domain;
-*/
-/*
-	const chash::size_t digest_size = 256;				// SHA3-256
-	const chash::size_t capacity = 512;
-	const chash::int_t sha3_domain = chash::kSHA3_domain;
-*/
-/*
-	const chash::size_t digest_size = 384;				// SHA3-384
-	const chash::size_t capacity = 768;
-	const chash::int_t sha3_domain = chash::kSHA3_domain;
-*/
-/*
-	const chash::size_t digest_size = 512;				// SHA3-512
-	const chash::size_t capacity = 1024;
-	const chash::int_t sha3_domain = chash::kSHA3_domain;
-*/
-/*
-	const chash::size_t digest_size = 4096;				// SHAKE-128
-	const chash::size_t capacity = 256;
-	const chash::int_t sha3_domain = chash::kSHAKE_domain;
-*/
+	//chash::SHA3_256 obj;	// SHA3-256
+	//chash::SHA3_512 obj;
+	chash::SHAKE128 obj;
+	obj.set_digest_size(4096);
 
-	const chash::size_t digest_size = 4096;				// SHAKE-256
-	const chash::size_t capacity = 512;
-	const chash::int_t sha3_domain = chash::kSHAKE_domain;
-
-
-	chash::Keccak<digest_size, capacity, sha3_domain> obj;
-
-	std::cout << (sha3_domain == chash::kSHA3_domain ? "SHA3-" : "SHAKE-")
-			<< (digest_size*8) << "\n\n";
+	std::cout << "SHA3-256" << "\n\n";
 
 	for(const std::pair<int, std::string> &input_str : input_strings) {
 		//std::string input_str = input_strings[1630];
@@ -117,12 +88,7 @@ int main(int, char* [])
 				<< input_str.first << "):\n" << input_str.second << "\n";
 		//std::cout << "Input data: " << input_str << "\n\n";
 		
-		//auto md = obj.MD(input_strings[0], 0);
-		//auto md = obj.MD(input_strings[30], 30);
-		//auto md = obj.MD(input_str, 1630);
-
-		//auto md = obj.MD(input_str.second, input_str.first);
-		auto md = obj.get_digest(input_str.second.c_str(), input_str.first);
+		auto md = obj.get_digest(input_str.second, input_str.first);
 
 		int i = 0;
 		std::cout << "Message digest:\n" << std::hex;
