@@ -99,11 +99,11 @@ namespace chash
     static const int_t k8Bits = 8;
 
     static const size_t kStateSize = 25;
-    static const size_t kKeccakWidth = 1600;	// in bits
+    static const size_t kKeccakWidth = 1600;    // in bits
     static const size_t kRounds = 24;
-    static const size_t kLaneSize = 64;			// lane size in bits
+    static const size_t kLaneSize = 64;         // lane size in bits
 
-    static const size_t kRhoOffset[25] = {		// offsets for RHO step mapping
+    static const size_t kRhoOffset[25] = {      // offsets for RHO step mapping
          0,  1, 62, 28, 27,
         36, 44,  6, 55, 20,
          3, 10, 43, 25, 39,
@@ -118,13 +118,13 @@ namespace chash
 
     static const int_t kIotaRc[24] = { // round constants for IOTA step mapping
         0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
-        0x8000000080008000,	0x000000000000808B,	0x0000000080000001,
-        0x8000000080008081, 0x8000000000008009,	0x000000000000008A,
-        0x0000000000000088,	0x0000000080008009,	0x000000008000000A,
-        0x000000008000808B,	0x800000000000008B,	0x8000000000008089,
-        0x8000000000008003,	0x8000000000008002, 0x8000000000000080,
-        0x000000000000800A, 0x800000008000000A,	0x8000000080008081,
-        0x8000000000008080,	0x0000000080000001, 0x8000000080008008
+        0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
+        0x8000000080008081, 0x8000000000008009, 0x000000000000008A,
+        0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+        0x000000008000808B, 0x800000000000008B, 0x8000000000008089,
+        0x8000000000008003, 0x8000000000008002, 0x8000000000000080,
+        0x000000000000800A, 0x800000008000000A, 0x8000000080008081,
+        0x8000000000008080, 0x0000000080000001, 0x8000000080008008
     };
 
     //----- Helper Functions (Inline only) -----
@@ -142,7 +142,7 @@ namespace chash
     class Keccak
     {
     public:
-        Keccak(const Keccak&) = delete;		// copy/move constructors in undef
+        Keccak(const Keccak&) = delete;     // copy/move constructors in undef
         Keccak(const Keccak&&) = delete;
         Keccak& operator=(Keccak&) = delete; // copy/move assignment is undef
         Keccak& operator=(Keccak&&) = delete;
@@ -191,7 +191,7 @@ namespace chash
         //-------------------------------------------------------------
         bool set_digest_size(const size_t digest_size_in_bits) noexcept
         {   // (!) For SHAKE functions ONLY, has no effect for SHA3 functions.
-            // WARNING: digest size is limited by MAX_HASH_SIZE
+            // WARNING: digest size is limited by kD_max (max hash size)
             if (kSHAKE == domain_) {
                 digest_size_ = digest_size_in_bits % kD_max;
                 return (true);
@@ -212,7 +212,8 @@ namespace chash
         //----- Basic KECCAK functions -----
 
         inline void reset_state() noexcept { 
-            for (int i = 0; i < 25; i++)		st_[i] = 0;
+            for (int i = 0; i < 25; i++)
+                st_[i] = 0;
         }
 
         //----------------------
@@ -237,7 +238,7 @@ namespace chash
                 }
                 st_[kPiJmp[23]] = lane1;
                 // CHI
-                for (int y = 0; y < 25; y += 5) {	// traverse through rows
+                for (int y = 0; y < 25; y += 5) {   // traverse through rows
                     sht[0] = st_[y];
                     sht[1] = st_[y + 1];
                     for (int x = 0; x < 3; x++) {
@@ -257,7 +258,7 @@ namespace chash
             for (const byte* cur = start; cur != end; cur++) {
                 st_raw_[cur - start] ^= *cur;
             }
-            if (size < rate_) {			// domain separation and padding
+            if (size < rate_) {         // domain separation and padding
                 int_t cur_byte = size / k8Bits;
                 int_t cur_bit = size % k8Bits;
                 st_raw_[cur_byte] ^= domain_ << cur_bit;
@@ -274,7 +275,7 @@ namespace chash
         //----------------------------------
         std::vector<byte> squeeze() noexcept
         {   // Squeezing's part of the "sponge" construction.
-		    // Getting the message digest (hash)
+            // Getting the message digest (hash)
             size_t rem = digest_size_ % k8Bits;
             std::vector<byte> digest(digest_size_/k8Bits + (rem?1:0), byte(0));
             size_t squeezed = 0;
@@ -294,8 +295,8 @@ namespace chash
 
     protected:		// Class Data Members
         union {
-            int_t st_[kStateSize];						// State (5 * 5 * w)
-            byte  st_raw_[kStateSize * sizeof(int_t)];	// State as byte array
+            int_t st_[kStateSize];                      // State (5 * 5 * w)
+            byte  st_raw_[kStateSize * sizeof(int_t)];  // State as byte array
         };
         size_t digest_size_;
         size_t capacity_;
@@ -342,7 +343,7 @@ namespace chash
     using SHA3_384 = Keccak<kD_384, kC_768, kSHA3>;
     using SHA3_512 = Keccak<kD_512, kC_1024, kSHA3>;
 
-    using SHAKE128 = Keccak<kD_128, kC_256, kSHAKE>;   // SHAKE
+    using SHAKE128 = Keccak<kD_128, kC_256, kSHAKE>;    // SHAKE
     using SHAKE256 = Keccak<kD_256, kC_512, kSHAKE>;
 
 } // end namespace "chash"
