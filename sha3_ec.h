@@ -10,13 +10,10 @@
 
 #include <vector>
 #include <string>
+#include <fstream>
 
 #include <iostream>
 #include <iomanip>
-
-//----- DEFINES -----
-
-#define MAX_HASH_SIZE (524280ULL)	// Max digest size in bits (2^16 - 1 bytes)
 
 //-----------------------------------------------------------------------------
 namespace chash
@@ -87,6 +84,10 @@ namespace chash
     }
 
     //----- ENUMS & CONSTANTS -----
+    enum DigestSize : size_t {
+        kD_128 = 128, kD_224 = 224, kD_256 = 256, kD_384 = 384, kD_512 = 512,
+        kD_max = 524280ULL      // Max digest size in bits (2^16 - 1 bytes)
+    };
 
     enum Capacity: size_t { 
         kC_256 = 256, kC_448 = 448, kC_512 = 512, kC_768 = 768, kC_1024 = 1024
@@ -136,8 +137,8 @@ namespace chash
 
     //----- CLASSES & STRUCTURES -----
     // 
-    // Basic class of KECCAK algorithm
-    template<size_t hash_size, Capacity c, Domain dom>
+    // ----- Basic class of KECCAK algorithm -----
+    template<DigestSize hash_size, Capacity c, Domain dom>
     class Keccak
     {
     public:
@@ -147,28 +148,26 @@ namespace chash
         Keccak& operator=(Keccak&&) = delete;
 
         explicit Keccak()
-        : digest_size_(hash_size % MAX_HASH_SIZE),
+        :   digest_size_(hash_size),
             capacity_(c),
             rounds_(kRounds),
             domain_(dom)
         {
-            if (capacity_ >= kKeccakWidth)
-                capacity_ = Capacity::kC_512;
             rate_ = kKeccakWidth - capacity_;
-            if (dom == Domain::kSHA3)
+            if (kSHA3 == dom)
                 suf_len_ = 2;
-            else if (dom == Domain::kSHAKE)
+            else if (kSHAKE == dom)
                 suf_len_ = 4;
-        }
+        } // end Keccak()
 
         ~Keccak() {};
 
         // ----- Main Interface ------
 
         std::vector<byte> get_digest(const char* msg,
-                                     const size_t len_in_bits) noexcept
+                                     const size_t len_in_bits)
         {   // Return the digest of <msg>
-	        // The caller ensures that the <msg> is available and valid
+            // The caller must guarantee that the <msg> is available and valid
             // 0. Preparing 
             //		in PAD(10*1) obligatory add "11", i.e. two bits
             size_t total_len = len_in_bits + suf_len_ + 2;
@@ -180,36 +179,34 @@ namespace chash
             for (int i = 0; i < total_len / rate_; i++) {
                 size_t block_size = std::min(len_in_bits - absorbed, rate_);
                 size_t offset = (block_size % k8Bits) ? (block_size/k8Bits + 1)
-                                                    : (block_size/k8Bits);
+                                                      : (block_size/k8Bits);
                 absorb(cur, cur + offset, block_size);
                 cur += offset;
                 absorbed += rate_;
             }
             // 2. Squeezing and return
             return (squeeze());
-        } // end get_digest()
+        } // end get_digest(const char* msg,...)
 
-        //--------------------------------------------------
-        std::vector<byte> get_digest(const std::string& msg,
-                                     size_t len_in_bits) noexcept
-        {   // Return the digest of <msg>
-            if (len_in_bits > msg.length()*k8Bits) // check for correct len
-                len_in_bits = msg.length() * k8Bits;
-            return get_digest(msg.c_str(), len_in_bits);
-        } // end get_digest()
-
-        //----------------------------------------------------
-        bool set_digest_size(const size_t digest_size_in_bits)
-        {   // for SHAKE functions ONLY!!!
-            // has no effect for SHA3 functions
-            if (Domain::kSHAKE == domain_) {
-                digest_size_ = digest_size_in_bits % MAX_HASH_SIZE;
+        //-------------------------------------------------------------
+        bool set_digest_size(const size_t digest_size_in_bits) noexcept
+        {   // (!) For SHAKE functions ONLY, has no effect for SHA3 functions.
+            // WARNING: digest size is limited by MAX_HASH_SIZE
+            if (kSHAKE == domain_) {
+                digest_size_ = digest_size_in_bits % kD_max;
                 return (true);
             }
             else
                 return (false);
-        }
+        } // end set_digest_size()
 
+        //----------------------------------
+        std::string get_hash_type() noexcept
+        {   // return the type of hash function, i.e. "SHA3-224", "SHA3-256"...
+            std::string hash_type = (kSHA3) ? "SHA3-" : "SHAKE";
+            hash_type += std::to_string(capacity_/2);
+            return (hash_type);
+        }
 
     protected:
         //----- Basic KECCAK functions -----
@@ -220,10 +217,10 @@ namespace chash
 
         //----------------------
         void keccap_p() noexcept
-        {// Underlying KECCAK permutation
+        {   // Underlying KECCAK permutation
             for (size_t rc = 0; rc < kRounds; rc++) {
                 // THETA
-                int_t sht[5] = { 0 };				// "sheet"
+                int_t sht[5] = { 0 };			// "sheet"
                 for (int x = 0; x < 5; x++) {	// traverse throught sheets
                     sht[x] ^= st_[x]^st_[x+5]^st_[x+10]^st_[x+15]^st_[x+20];
                 }
@@ -274,23 +271,28 @@ namespace chash
             keccap_p();
         } // end absorb()
 
+        //----------------------------------
         std::vector<byte> squeeze() noexcept
         {   // Squeezing's part of the "sponge" construction.
 		    // Getting the message digest (hash)
-            std::vector<byte> digest(digest_size_ / k8Bits, 0);
+            size_t rem = digest_size_ % k8Bits;
+            std::vector<byte> digest(digest_size_/k8Bits + (rem?1:0), byte(0));
             size_t squeezed = 0;
             for (size_t i = 0; i < (digest_size_ / rate_ + 1); i++) {
                 size_t block_size = std::min((digest_size_ - squeezed), rate_);
                 for (size_t j = squeezed; j < squeezed+block_size; j += k8Bits)
-                    digest[j / k8Bits] = st_raw_[(j - squeezed) / k8Bits];
+                    digest[j / k8Bits] = st_raw_[(j - squeezed)/k8Bits];
                 squeezed += block_size;
                 if (squeezed < digest_size_)
                     keccap_p();
             }
+            // If digest size in bits not multiple by 8
+            if(rem)
+                digest[digest.size() - 1] &= 0xFF >> (k8Bits - rem);
             return(digest);
         } // end squeeze()
 
-    private:		// Class Data Members
+    protected:		// Class Data Members
         union {
             int_t st_[kStateSize];						// State (5 * 5 * w)
             byte  st_raw_[kStateSize * sizeof(int_t)];	// State as byte array
@@ -301,17 +303,47 @@ namespace chash
         size_t rounds_;
         int_t  domain_;		// domain separation suffix
         size_t suf_len_;	// length in bits of the suffix
-    };  // end class "Keccak"
+    };  // ----- end class "Keccak" -----
+
+    // ----- Enhanced class of KECCAK algorithm -----
+    // ----- Application of the IUF (Init/Update/Finalize) concept -----
+    template<DigestSize hash_size, Capacity c, Domain dom>
+    class IUFKeccak : public Keccak<hash_size, c, dom>
+    {
+    public:
+        explicit IUFKeccak() 
+        : Keccak()
+        {
+            bit_absorbed = 0;
+            raw_data.resize(this->rate_/(k8Bits*sizeof(int_t)), 0);
+        }
+
+        ~IUFKeccak() {}
+
+        // ----- Main Interface ------
+        void init()
+        {
+            bit_absorbed = 0;
+            for (int_t i : raw_data)
+                i = 0;
+        } // end init()
+
+
+    private:		// Class Data Members
+        std::vector<int_t> raw_data;
+        size_t bit_absorbed;
+    }; // ----- end class IUFKeccak -----
+
 
     //----- Predefined Aliases -----
 
-    using SHA3_224 = Keccak<224, Capacity::kC_448, Domain::kSHA3>;     // SHA3
-    using SHA3_256 = Keccak<256, Capacity::kC_512, Domain::kSHA3>;
-    using SHA3_384 = Keccak<384, Capacity::kC_768, Domain::kSHA3>;
-    using SHA3_512 = Keccak<512, Capacity::kC_1024, Domain::kSHA3>;
+    using SHA3_224 = Keccak<kD_224, kC_448, kSHA3>;     // SHA3
+    using SHA3_256 = Keccak<kD_256, kC_512, kSHA3>;
+    using SHA3_384 = Keccak<kD_384, kC_768, kSHA3>;
+    using SHA3_512 = Keccak<kD_512, kC_1024, kSHA3>;
 
-    using SHAKE128 = Keccak<128, Capacity::kC_256, Domain::kSHAKE>;   // SHAKE
-    using SHAKE256 = Keccak<256, Capacity::kC_512, Domain::kSHAKE>;
+    using SHAKE128 = Keccak<kD_128, kC_256, kSHAKE>;   // SHAKE
+    using SHAKE256 = Keccak<kD_256, kC_512, kSHAKE>;
 
 } // end namespace "chash"
 
