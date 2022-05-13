@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
+#include <cstring>
 
 //==============================================================================
 //=== FACILITIES ===
@@ -48,7 +49,7 @@ std::string byte_vec_to_str(const std::vector<chash::byte>& vec,
 		if (!((i + 1) % byte_in_line))
 			res += '\n';
 	}
-	if(separator != "")
+	if(std::strcmp(separator,"") == 0)
 		res.pop_back();
 	if ('\n' == res[res.length() - 1])
 		res.pop_back();
@@ -104,14 +105,14 @@ int main(int, char* [])
 ££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££££"}
 */		
 	};
-
-	//chash::SHA3_224 obj;
+/*
+	chash::SHA3_224 obj;
 	//chash::SHA3_256 obj;
 	//chash::SHA3_384 obj;
-	chash::SHA3_512 obj;
+	//chash::SHA3_512 obj;
 	//chash::SHAKE128 obj;
 	//chash::SHAKE256 obj;
-	//obj.set_digest_size(1208);
+	//obj.set_digest_size(4096);
 
 	std::cout << obj.get_hash_type() << "\n\n";
 
@@ -121,42 +122,73 @@ int main(int, char* [])
 		std::cout << "Input data (message length = " << std::dec
 				<< input_str.first << "):\n" << input_str.second << "\n";
 		
-		auto md = obj.get_digest(input_str.second.c_str(), input_str.first);
+		auto md = obj.get_digest(input_str.second, input_str.first);
 
 		std::cout << byte_vec_to_str(md, " ", true, 16) << "\n";
 
-		/*
-		int i = 0;
-		std::cout << "Message digest:\n" << std::hex;
-		for(const auto c : md) {
-			std::cout << std::setw(2) << std::setfill('0') << std::uppercase
-					  << static_cast<int>(c) << " ";
-			if(!((i+1)%16))
-						std::cout << '\n';
-			i++;
-		}
-		*/
+
+//		int i = 0;
+//		std::cout << "Message digest:\n" << std::hex;
+//		for(const auto c : md) {
+//			std::cout << std::setw(2) << std::setfill('0') << std::uppercase
+//					  << static_cast<int>(c) << " ";
+//			if(!((i+1)%16))
+//						std::cout << '\n';
+//			i++;
+//		}
+
 		std::cout << "\n";
 	}
+*/
+	chash::SHA3_256_IUF obj;
+	std::cout << obj.get_hash_type() << "\n\n";
+
+
+	std::cout << "Message:\n" << input_strings[1630] << "\n";
+
+	obj.update(input_strings[1630].begin(), input_strings[1630].begin() + 135);
+    obj.update(input_strings[1630].begin() + 135, input_strings[1630].end());
+
+    std::cout << "\nMessage digest:\n";
+    std::cout << byte_vec_to_str(obj.finalize(), " ", true, 16) << "\n";
+
+	/*
+	std::ifstream input_file (".testdata.bin", std::ios::in|std::ios::binary|std::ios::ate);
+	if (input_file.is_open()) {
+	    const size_t rate_in_bytes = 136;     // in bytes
+	    std::string buffer(rate_in_bytes+1, 0);
+
+	    size_t left_to_read = input_file.tellg();
+        input_file.seekg (0, std::ios::beg);
+	    while(left_to_read) {
+	        size_t block_size = std::min(left_to_read, rate_in_bytes);
+	        input_file.read(&buffer.front(), block_size);
+	        left_to_read -= block_size;
+
+	        obj.update(buffer.begin(), buffer.begin() + block_size);
+
+	        std::cout << "Read " <<  block_size << " bytes"
+	                  << "(" << left_to_read << " left)\n";
+	        std::copy(buffer.begin(), buffer.begin()+block_size,
+	                  std::ostream_iterator<char>(std::cout, ""));
+	        std::cout << "\n";
+	    }
+        input_file.close();
+
+        std::cout << "\nDigest of file:\n";
+        std::cout << byte_vec_to_str(obj.finalize(), " ", true, 16) << "\n";
+	}
+	else {
+	    std::cout << "Error opening file!\n";
+	}
+    */
 
 	std::cout << "\n-------------------\n" << "End.\n";
 	return(0);
 }
 
 /*
-		//----------------------------
-		std::vector<byte> file_digest(std::ifstream &input_file)
-		{   // Return the digest of file (processed as a sequence of bytes)
-			// NOTES: - The caller must provide that the file stream is valid
-			//          and available.
-			//        - If the input file stream is not valid, returns nullptr
-			if (input_file.is_open()) {
-				std::streampos a;
-			}
-			else
-				return(nullptr);
-		} // end file_digest()
-
+  // ----------- Read from file (binary) --------------
   std::ifstream is ("test.txt", std::ifstream::binary);
   if (is) {
 	// get length of file:
@@ -180,7 +212,7 @@ int main(int, char* [])
 	delete[] buffer;
   }
 
-  // reading an entire binary file
+  //------------ Reading an entire binary file --------------
   streampos size;
   char * memblock;
 
