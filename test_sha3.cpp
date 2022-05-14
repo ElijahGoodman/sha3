@@ -5,6 +5,9 @@
 
 //==============================================================================
 
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+
 #include "sha3_ec.h"
 
 #include <iostream>
@@ -49,7 +52,7 @@ std::string byte_vec_to_str(const std::vector<chash::byte>& vec,
 		if (!((i + 1) % byte_in_line))
 			res += '\n';
 	}
-	if(std::strcmp(separator,"") == 0)
+	if(std::strcmp(separator,"") != 0)
 		res.pop_back();
 	if ('\n' == res[res.length() - 1])
 		res.pop_back();
@@ -59,6 +62,9 @@ std::string byte_vec_to_str(const std::vector<chash::byte>& vec,
 //==============================================================================
 int main(int, char* [])
 {
+	// Memory diagnostic
+	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+
 	std::cout << "Check connection...\n";
 
 	//std::cout << std::hex << (0x00000000000000FF << 8) << " " << (0x00000000000000FF << 16);
@@ -140,19 +146,41 @@ int main(int, char* [])
 		std::cout << "\n";
 	}
 */
-	chash::SHA3_256_IUF obj;
+	chash::SHA3_224_IUF obj;
+	//chash::SHA3_256_IUF obj;
+	//chash::SHA3_384_IUF obj;
+	//chash::SHA3_512_IUF obj;
+	//chash::SHAKE128_IUF obj;
+/*
+	obj.set_digest_size(256);
 	std::cout << obj.get_hash_type() << "\n\n";
 
+	std::string empty_str = "";
 
-	std::cout << "Message:\n" << input_strings[1630] << "\n";
+	//obj.update("The quick brown fox jumps over the lazy dog");
+	obj.update("The quick b");
+	obj.update("row");
+	obj.update("n fox jumps over the lazy do");
+	obj.update("f");
 
-	obj.update(input_strings[1630].begin(), input_strings[1630].begin() + 135);
-    obj.update(input_strings[1630].begin() + 135, input_strings[1630].end());
-
-    std::cout << "\nMessage digest:\n";
-    std::cout << byte_vec_to_str(obj.finalize(), " ", true, 16) << "\n";
 
 	/*
+	std::cout << "Message:\n" << input_strings[1630] << "\n";
+
+	std::cout << "Absorbed " << obj.update(empty_str.begin(), empty_str.end()) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(empty_str.end(), empty_str.begin()) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin(), input_strings[1600].begin()) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin(), input_strings[1600].begin()+1) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin()+1, input_strings[1600].begin()+3) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin()+3, input_strings[1600].begin()+135) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin()+135, input_strings[1600].begin()+199) << " bytes\n";
+	std::cout << "Absorbed " << obj.update(input_strings[1600].begin()+199, input_strings[1600].end()) << " bytes\n";
+	*/
+/*
+	std::cout << "\nMessage digest:\n";
+    std::cout << byte_vec_to_str(obj.finalize(), "", false) << "\n";
+*/
+	
 	std::ifstream input_file (".testdata.bin", std::ios::in|std::ios::binary|std::ios::ate);
 	if (input_file.is_open()) {
 	    const size_t rate_in_bytes = 136;     // in bytes
@@ -181,9 +209,10 @@ int main(int, char* [])
 	else {
 	    std::cout << "Error opening file!\n";
 	}
-    */
+    
 
 	std::cout << "\n-------------------\n" << "End.\n";
+
 	return(0);
 }
 

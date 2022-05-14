@@ -11,74 +11,12 @@
 #include <vector>
 #include <string>
 
-#include <iostream>
-#include <iomanip>
-
-
 namespace chash     // "cryptographic hash"
 {
 //------ TYPES ALIASES ------
 typedef unsigned long long 	int_t;
 typedef unsigned long long 	size_t;
 typedef unsigned char 		byte;
-
-// for debugging
-void print_state(const int_t state[25], const std::string& title)
-{
-    std::cout << title;
-    std::cout << std::setfill('0');
-    for (int y = 0; y < 5; y++) {
-        for (int x = 0; x < 5; x++) {
-            std::cout << std::dec << "[" << x << ", " << y << "] = "
-                << std::hex << std::nouppercase
-                << std::setw(sizeof(int_t) * 2) << state[x + y * 5] << '\n';
-        }
-    }
-    std::cout << "-------------------\n" << std::dec;
-}
-
-// for debugging
-void print_state_raw(const byte state[25 * sizeof(int_t)], const std::string& title)
-{
-    std::cout << title << std::hex;
-
-    for (int i = 0; i < 25 * sizeof(int_t); i++) {
-        std::cout << std::setw(2) << std::setfill('0') << std::uppercase
-            << int(state[i]) << ' ';
-        if (!((i + 1) % 16))
-            std::cout << '\n';
-    }
-    std::cout << "\n-------------------\n" << std::dec;
-}
-
-// for debugging
-void print_data_raw(const std::vector<int_t>& data, const std::string& title)
-{
-    std::cout << title << std::hex;
-    for (const int_t number : data) {
-        for (int i = 0; i < sizeof(int_t); i++) {
-            int temp = (number >> (i * 8)) & 0xFF;
-            std::cout << std::setw(2) << std::setfill('0') << std::uppercase
-                << temp << " ";
-        }
-    }
-    std::cout << "\n-------------------\n" << std::dec;
-}
-
-// for debugging
-void print_vector(const std::vector<int_t>& data, const std::string& title)
-{
-    std::cout << title;
-    std::cout << std::setfill('0');
-    int i = 0;
-    for (int_t word : data) {
-        std::cout << std::dec << std::setw(3) << i << ' ' << std::hex
-            << std::uppercase << std::setfill('0')
-            << std::setw(sizeof(int_t) * 2) << word << '\n';
-        i++;
-    }
-    std::cout << "-------------------\n" << std::dec;
-}
 
 //------ ENUMS & CONSTANTS ------
 enum DigestSize : size_t {
@@ -93,6 +31,9 @@ enum Domain : int_t {
 };
 
 static const int_t k8Bits = 8;
+static constexpr int_t kIntSize = sizeof(int_t);
+
+static_assert(8==kIntSize, "Type 'long long int' must been at least 8 bytes!");
 
 static const size_t kStateSize = 25;
 static const size_t kKeccakWidth = 1600;    // in bits
@@ -112,7 +53,7 @@ static const int_t kPiJmp[kStateSize-1] = {     // for PI step mapping
     17, 11, 7, 10
 };
 
-static const int_t kIotaRc[kRounds] = { // round constants for IOTA step mapping
+static const int_t kIotaRc[kRounds] = {// round constants for IOTA step mapping
     0x0000000000000001, 0x0000000000008082, 0x800000000000808A,
     0x8000000080008000, 0x000000000000808B, 0x0000000080000001,
     0x8000000080008081, 0x8000000000008009, 0x000000000000008A,
@@ -145,7 +86,7 @@ public:
 
     //------ Main Interface ------
     std::vector<byte> get_digest(const std::string& msg, size_t len_in_bits)
-                                     noexcept;
+                                     noexcept;  // wrapper function
     bool set_digest_size(const size_t digest_size_in_bits) noexcept;
     std::string get_hash_type() noexcept;
 
@@ -196,7 +137,7 @@ Keccak<hash_size, c, dom>::Keccak()
 template<DigestSize hash_size, Capacity c, Domain dom>
 std::vector<byte> Keccak<hash_size, c, dom>::get_digest(const std::string& msg,
                                                    size_t len_in_bits) noexcept
-{   // Return the digest of <msg>
+{   // Wrapper function. Return the digest of <msg>
     // WARNING: if "len_in_bits" exceeds a length of "msg",
     //          "len_in_bits" truncated by length of "msg.
     if(len_in_bits > msg.length()*k8Bits)
@@ -230,7 +171,7 @@ std::string Keccak<hash_size, c, dom>::get_hash_type() noexcept
 //----------------------------------------------------
 template<DigestSize hash_size, Capacity c, Domain dom>
 std::vector<byte>
-Keccak<hash_size, c, dom>::get_digest(const char* msg, const size_t len_in_bits)
+Keccak<hash_size,c,dom>::get_digest(const char* msg, const size_t len_in_bits)
 {   // Return the digest of <msg>
     // The caller must guarantee that the <msg> is available and valid
     // 0. Preparing
@@ -299,8 +240,8 @@ void Keccak<hash_size, c, dom>::absorb(const byte* start, const byte* end,
         st_raw_[cur - start] ^= *cur;
     }
     if (size < rate_) {         // domain separation and padding
-        int_t cur_byte = size / k8Bits;
-        int_t cur_bit = size % k8Bits;
+        size_t cur_byte = size / k8Bits;
+        size_t cur_bit = size % k8Bits;
         st_raw_[cur_byte] ^= domain_ << cur_bit;
         int overflow = (cur_bit + suf_len_ + 1) - k8Bits;
         if (overflow > 0) { // suffix appending over 64 bit boundary
@@ -322,7 +263,7 @@ std::vector<byte> Keccak<hash_size, c, dom>::squeeze() noexcept
     size_t squeezed = 0;
     for (size_t i = 0; i < (digest_size_ / rate_ + 1); i++) {
         size_t block_size = std::min((digest_size_ - squeezed), rate_);
-        for (size_t j = squeezed; j < squeezed+block_size; j += k8Bits)
+        for (size_t j = squeezed; j < squeezed + block_size; j += k8Bits)
             digest[j / k8Bits] = st_raw_[(j - squeezed)/k8Bits];
         squeezed += block_size;
         if (squeezed < digest_size_)
@@ -342,87 +283,84 @@ template<DigestSize hash_size, Capacity c, Domain dom>
 class IUFKeccak : public Keccak<hash_size, c, dom>
 {   // The class is designed to process input messages with a length
     // multiple of 8 (i.e. byte-oriented messages)
+    using str_const_iter = std::string::const_iterator;
 public:
-    IUFKeccak(const IUFKeccak&) = delete;     // copy/move constructors in undef
+    IUFKeccak(const IUFKeccak&) = delete;    // copy/move constructors in undef
     IUFKeccak(const IUFKeccak&&) = delete;
     IUFKeccak& operator=(IUFKeccak&) = delete; // copy/move assignment is undef
     IUFKeccak& operator=(IUFKeccak&&) = delete;
 
-    explicit IUFKeccak();
+    explicit IUFKeccak() : rate_in_bytes_(this->rate_ / k8Bits)  {  init();  }
     ~IUFKeccak() {}
 
     //------ Main Interface ------
-    void init();
-    bool update(const std::string::iterator first,
-                const std::string::iterator last);
-    std::vector<byte> finalize();
-
-protected:
-    void absorb();
+    void init() noexcept;
+    size_t update(const str_const_iter start, const str_const_iter end);
+    size_t update(const std::string& data); // wrapper function
+    std::vector<byte> finalize() noexcept;
 
 private:		// Class Data Members
-    std::vector<int_t> raw_data_;
     size_t rate_in_bytes_;
-    size_t bytes_absorbed_;
+    size_t byte_absorbed_;
 }; // end for class IUFKeccak declaration
 
 //----------------------------------------------------
 template<DigestSize hash_size, Capacity c, Domain dom>
-IUFKeccak<hash_size, c, dom>::IUFKeccak()
-   : Keccak<hash_size, c, dom>::Keccak()
+void IUFKeccak<hash_size, c, dom>::init() noexcept
 {
-    rate_in_bytes_ = this->rate_/k8Bits;
-    raw_data_.resize(rate_in_bytes_/sizeof(int_t));
-    init();
-    //std::cout << "raw_data_ size = " << raw_data_.size() << "\n";
-} // end IUFKeccak()
-
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-void IUFKeccak<hash_size, c, dom>::init()
-{
-    bytes_absorbed_ = 0;
-    for (int_t &i : raw_data_)
-        i = 0;
+    byte_absorbed_ = 0;
     this->reset_state();
 } // end init()
 
 //----------------------------------------------------
 template<DigestSize hash_size, Capacity c, Domain dom>
-bool IUFKeccak<hash_size, c, dom>::update(const std::string::iterator first,
-                                          const std::string::iterator last)
-{
-    size_t bytes_to_absorb = last - first;
-    byte *receiver = reinterpret_cast<byte*>(raw_data_.data());
+size_t IUFKeccak<hash_size, c, dom>::update(const str_const_iter start, 
+                                            const str_const_iter end)
+{   // Update State based on input data
+    if (start >= end)
+        return 0;
+    const size_t len = end - start;
+    size_t left_to_process = len;
+    size_t block_size = std::min(len, rate_in_bytes_ - byte_absorbed_);
+    str_const_iter block = start;
 
-    for(std::string::iterator cur = first; cur != last; cur++) {
-        receiver[bytes_absorbed_ + (cur-first)] = *cur;
-    }
+    while (left_to_process) {
+        for (str_const_iter cur = block; cur != block + block_size; cur++) {
+            this->st_raw_[byte_absorbed_ + (cur - block)] ^= *cur;
+        }
+        byte_absorbed_ += block_size;
+        if (byte_absorbed_ == rate_in_bytes_) {
+            this->keccap_p();
+            byte_absorbed_ = 0;
+        }
+        left_to_process -= block_size;
+        if (left_to_process) {
+            block += block_size;
+            block_size = std::min(left_to_process, rate_in_bytes_);
+        }
+    } // end while(left_to_process)
 
-
-    return(false);
+    return (len);
 } // end update()
 
 //----------------------------------------------------
 template<DigestSize hash_size, Capacity c, Domain dom>
-std::vector<byte> IUFKeccak<hash_size, c, dom>::finalize()
-{
-    // Add domain separation and padding
-
-
-    return(this->squeeze());
-} // end finalize()
+size_t IUFKeccak<hash_size, c, dom>::update(const std::string& data)
+{   // Wrapper function
+    return (update(data.begin(), data.end()));
+}
 
 //----------------------------------------------------
 template<DigestSize hash_size, Capacity c, Domain dom>
-void IUFKeccak<hash_size, c, dom>::absorb()
-{
-    for(int_t &lane : raw_data_) {
-        this->st_ ^= lane;
-    }
-    this->keccap_p();
-} // end absorb()
+std::vector<byte> IUFKeccak<hash_size, c, dom>::finalize() noexcept
+{   // Add domain separation and padding, return digest
+    this->st_raw_[byte_absorbed_ % rate_in_bytes_] ^= this->domain_;
+    this->st_raw_[rate_in_bytes_ - 1] ^= 0x80;
 
+    this->keccap_p();       // Last permutation
+
+    return(this->squeeze());
+} // end finalize()
 //====== end for class IUFKeccak definition ======
 
 
