@@ -27,6 +27,8 @@
 //=== FACILITIES ===
 //==============================================================================
 
+static char separator = 0;
+
 // convert vector of byte (unsigned char) to std::string
 std::string byte_vec_to_str(const std::vector<chash::byte>& vec,
 							const char *separator = "",
@@ -58,6 +60,24 @@ std::string byte_vec_to_str(const std::vector<chash::byte>& vec,
 		res.pop_back();
 	return (res);
 }
+
+//------ Overload output for IUFKeccak ------
+template<chash::DigestSize hash_size, chash::Capacity c, chash::Domain dom>
+std::ostream& operator<<(std::ostream& out, chash::IUFKeccak<hash_size, c, dom>& obj)
+{
+    std::vector<chash::byte> digest = obj.finalize();
+    char prev_fill = out.fill('0');
+    out << std::hex;
+    for(size_t i = 0; i < digest.size(); i++) {
+        out << std::setw(2) << static_cast<int>(digest[i]);
+        if(separator and (i+1 != digest.size()))
+            out << separator;
+    }
+    out.fill(prev_fill);
+    out << std::flush << std::dec;
+    return (out);
+} // end
+
 
 //==============================================================================
 int main(int, char* [])
@@ -146,11 +166,15 @@ int main(int, char* [])
 		std::cout << "\n";
 	}
 */
-	chash::SHA3_224_IUF obj;
+	//chash::SHA3_224_IUF obj;
 	//chash::SHA3_256_IUF obj;
 	//chash::SHA3_384_IUF obj;
-	//chash::SHA3_512_IUF obj;
+	chash::SHA3_512_IUF obj;
 	//chash::SHAKE128_IUF obj;
+	obj.set_digest_size(4096);      // SHAKE only (has no effect for SHA3)
+
+	std::cout << obj.get_hash_type() << "\n\n";
+
 /*
 	obj.set_digest_size(256);
 	std::cout << obj.get_hash_type() << "\n\n";
@@ -164,7 +188,7 @@ int main(int, char* [])
 	obj.update("f");
 
 
-	/*
+
 	std::cout << "Message:\n" << input_strings[1630] << "\n";
 
 	std::cout << "Absorbed " << obj.update(empty_str.begin(), empty_str.end()) << " bytes\n";
@@ -188,7 +212,7 @@ int main(int, char* [])
 
 	    size_t left_to_read = input_file.tellg();
         input_file.seekg (0, std::ios::beg);
-	    while(left_to_read) {
+        while(left_to_read) {
 	        size_t block_size = std::min(left_to_read, rate_in_bytes);
 	        input_file.read(&buffer.front(), block_size);
 	        left_to_read -= block_size;
@@ -204,7 +228,9 @@ int main(int, char* [])
         input_file.close();
 
         std::cout << "\nDigest of file:\n";
-        std::cout << byte_vec_to_str(obj.finalize(), " ", true, 16) << "\n";
+        //std::cout << byte_vec_to_str(obj.finalize(), " ", true, 16) << "\n";
+        separator = ' ';
+        std::cout << std::uppercase << obj << std::nouppercase << std::endl;
 	}
 	else {
 	    std::cout << "Error opening file!\n";

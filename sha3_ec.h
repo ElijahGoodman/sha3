@@ -10,6 +10,8 @@
 
 #include <vector>
 #include <string>
+#include <iostream>
+#include <iomanip>
 
 namespace chash     // "cryptographic hash"
 {
@@ -211,13 +213,13 @@ void Keccak<hash_size, c, dom>::keccap_p() noexcept
         }
         // RHO & PI
         int_t lane1 = rotl(st_[1], kRhoOffset[1]);
-        for (int i = 0; i < kStateSize-2; i++) {
+        for (size_t i = 0; i < kStateSize-2; i++) {
             st_[kPiJmp[i]] = rotl(st_[kPiJmp[i + 1]],
                 kRhoOffset[kPiJmp[i + 1]]);
         }
         st_[kPiJmp[23]] = lane1;
         // CHI
-        for (int y = 0; y < kStateSize; y += 5) {   // traverse through rows
+        for (size_t y = 0; y < kStateSize; y += 5) {   // traverse through rows
             sht[0] = st_[y];
             sht[1] = st_[y + 1];
             for (int x = 0; x < 3; x++) {
@@ -259,9 +261,9 @@ std::vector<byte> Keccak<hash_size, c, dom>::squeeze() noexcept
 {   // Squeezing's part of the "sponge" construction.
     // Getting the message digest (hash)
     size_t rem = digest_size_ % k8Bits;
-    std::vector<byte> digest(digest_size_/k8Bits + (rem?1:0), byte(0));
+    std::vector<byte> digest(digest_size_/k8Bits + (rem ? 1 : 0), 0);
     size_t squeezed = 0;
-    for (size_t i = 0; i < (digest_size_ / rate_ + 1); i++) {
+    for (size_t i = 0; i < (digest_size_/rate_ + 1); i++) {
         size_t block_size = std::min((digest_size_ - squeezed), rate_);
         for (size_t j = squeezed; j < squeezed + block_size; j += k8Bits)
             digest[j / k8Bits] = st_raw_[(j - squeezed)/k8Bits];
@@ -290,7 +292,8 @@ public:
     IUFKeccak& operator=(IUFKeccak&) = delete; // copy/move assignment is undef
     IUFKeccak& operator=(IUFKeccak&&) = delete;
 
-    explicit IUFKeccak() : rate_in_bytes_(this->rate_ / k8Bits)  {  init();  }
+    explicit IUFKeccak()
+    : rate_in_bytes_(this->rate_ / k8Bits)  {  init();  }
     ~IUFKeccak() {}
 
     //------ Main Interface ------
@@ -302,6 +305,7 @@ public:
 private:		// Class Data Members
     size_t rate_in_bytes_;
     size_t byte_absorbed_;
+    char   separator_;
 }; // end for class IUFKeccak declaration
 
 //----------------------------------------------------
@@ -318,7 +322,7 @@ size_t IUFKeccak<hash_size, c, dom>::update(const str_const_iter start,
                                             const str_const_iter end)
 {   // Update State based on input data
     if (start >= end)
-        return 0;
+        return (0);
     const size_t len = end - start;
     size_t left_to_process = len;
     size_t block_size = std::min(len, rate_in_bytes_ - byte_absorbed_);
