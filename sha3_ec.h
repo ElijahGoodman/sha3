@@ -20,7 +20,7 @@ typedef unsigned long long 	int_t;
 typedef unsigned long long 	size_t;
 typedef unsigned char 		byte;
 
-//------ ENUMS & CONSTANTS ------
+//------ STRUCTS / ENUMS / CONSTANTS ------
 enum DigestSize : size_t {
     kD_128 = 128, kD_224 = 224, kD_256 = 256, kD_384 = 384, kD_512 = 512,
     kD_max = 524280ULL      // Max digest size in bits (2^16 - 1 bytes)
@@ -29,8 +29,28 @@ enum Capacity: size_t {
     kC_256 = 256, kC_448 = 448, kC_512 = 512, kC_768 = 768, kC_1024 = 1024
 };
 enum Domain : int_t {
-    kSHA3 = 0b110, kSHAKE = 0b11111
+    kDomSHA3 = 0b110, kDomSHAKE = 0b11111
 };
+
+struct KeccParam {   // KECCAK parameters
+    explicit KeccParam()
+    : d_size(kD_256), cap(kC_512), dom(kDomSHA3)
+    {}
+    explicit KeccParam(chash::DigestSize hs, chash::Capacity c, chash::Domain d)
+        : d_size(hs), cap(c), dom(d)
+    {}
+public:
+    chash::DigestSize   d_size;
+    chash::Capacity     cap;
+    chash::Domain       dom;
+};
+
+const KeccParam kSHA3_224{kD_224, kC_448, kDomSHA3};
+const KeccParam kSHA3_256{kD_256, kC_512, kDomSHA3};
+const KeccParam kSHA3_384{kD_384, kC_768, kDomSHA3};
+const KeccParam kSHA3_512{kD_512, kC_1024, kDomSHA3};
+const KeccParam kSHAKE128(kD_128, kC_256, kDomSHAKE);
+const KeccParam kSHAKE256(kD_256, kC_512, kDomSHAKE);
 
 static const int_t k8Bits = 8;
 static constexpr int_t kIntSize = sizeof(int_t);
@@ -74,16 +94,16 @@ inline int_t rotl(int_t n, size_t offset) noexcept
 }
 
 //====== Basic class of SHA3 specification ======
-template<DigestSize hash_size, Capacity c, Domain dom>
 class Keccak
 {
 public:
+    Keccak() = delete;
     Keccak(const Keccak&) = delete;     // copy/move constructors in undef
     Keccak(const Keccak&&) = delete;
     Keccak& operator=(Keccak&) = delete; // copy/move assignment is undef
     Keccak& operator=(Keccak&&) = delete;
 
-    explicit Keccak();
+    explicit Keccak(KeccParam param);
     ~Keccak() {};
 
     //------ Main Interface ------
@@ -120,25 +140,23 @@ protected:
     size_t suf_len_;	// length in bits of the suffix
 };  // end for class "Keccak" declaration
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-Keccak<hash_size, c, dom>::Keccak()
-:   digest_size_(hash_size),
-    capacity_(c),
+//-----------------------------
+Keccak::Keccak(KeccParam param)
+:   digest_size_(param.d_size),
+    capacity_(param.cap),
     rounds_(kRounds),
-    domain_(dom)
+    domain_(param.dom)
 {
     rate_ = kKeccakWidth - capacity_;
-    if (kSHA3 == dom)
+    if (kDomSHA3 == param.dom)
         suf_len_ = 2;
-    else if (kSHAKE == dom)
+    else if (kDomSHAKE == param.dom)
         suf_len_ = 4;
 } // end Keccak()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-std::vector<byte> Keccak<hash_size, c, dom>::get_digest(const std::string& msg,
-                                                   size_t len_in_bits) noexcept
+//----------------------------------------------------------
+std::vector<byte> Keccak::get_digest(const std::string& msg,
+                                     size_t len_in_bits) noexcept
 {   // Wrapper function. Return the digest of <msg>
     // WARNING: if "len_in_bits" exceeds a length of "msg",
     //          "len_in_bits" truncated by length of "msg.
@@ -147,13 +165,11 @@ std::vector<byte> Keccak<hash_size, c, dom>::get_digest(const std::string& msg,
     return (get_digest(msg.c_str(), len_in_bits));
 } // end get_digest()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-bool Keccak<hash_size, c, dom>::set_digest_size(const size_t hash_size_in_bits)
-                                                noexcept
+//-------------------------------------------------------------------
+bool Keccak::set_digest_size(const size_t hash_size_in_bits) noexcept
 {   // (!) For SHAKE functions ONLY, has no effect for SHA3 functions.
     // WARNING: digest size is limited by kD_max (max hash size)
-    if (kSHAKE == domain_) {
+    if (kDomSHAKE == domain_) {
         digest_size_ = hash_size_in_bits % kD_max;
         return (true);
     }
@@ -161,19 +177,16 @@ bool Keccak<hash_size, c, dom>::set_digest_size(const size_t hash_size_in_bits)
         return (false);
 } // end set_digest_size()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-std::string Keccak<hash_size, c, dom>::get_hash_type() noexcept
+//------------------------------------------
+std::string Keccak::get_hash_type() noexcept
 {   // return the type of hash function, i.e. "SHA3-224", "SHA3-256"...
-    std::string hash_type = (kSHA3==domain_) ? "SHA3-" : "SHAKE";
+    std::string hash_type = (kDomSHA3==domain_) ? "SHA3-" : "SHAKE";
     hash_type += std::to_string(capacity_/2);
     return (hash_type);
 }
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-std::vector<byte>
-Keccak<hash_size,c,dom>::get_digest(const char* msg, const size_t len_in_bits)
+//-----------------------------------------------------------------------------
+std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
 {   // Return the digest of <msg>
     // The caller must guarantee that the <msg> is available and valid
     // 0. Preparing
@@ -196,9 +209,8 @@ Keccak<hash_size,c,dom>::get_digest(const char* msg, const size_t len_in_bits)
     return (squeeze());
 } // end get_digest(const char* msg,...)
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-void Keccak<hash_size, c, dom>::keccap_p() noexcept
+//------------------------------
+void Keccak::keccap_p() noexcept
 {   // Underlying KECCAK permutation
     for (size_t rc = 0; rc < kRounds; rc++) {
         // THETA
@@ -233,10 +245,8 @@ void Keccak<hash_size, c, dom>::keccap_p() noexcept
     } // end for(size_t rc...)
 } // end keccak_p()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-void Keccak<hash_size, c, dom>::absorb(const byte* start, const byte* end,
-                                       size_t size) noexcept
+//---------------------------------------------------------------------------
+void Keccak::absorb(const byte* start, const byte* end, size_t size) noexcept
 {   // Absorbing part of input [start, end] with State array
     for (const byte* cur = start; cur != end; cur++) {
         st_raw_[cur - start] ^= *cur;
@@ -255,9 +265,8 @@ void Keccak<hash_size, c, dom>::absorb(const byte* start, const byte* end,
     keccap_p();
 } // end absorb()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-std::vector<byte> Keccak<hash_size, c, dom>::squeeze() noexcept
+//------------------------------------------
+std::vector<byte> Keccak::squeeze() noexcept
 {   // Squeezing's part of the "sponge" construction.
     // Getting the message digest (hash)
     size_t rem = digest_size_ % k8Bits;
@@ -281,19 +290,20 @@ std::vector<byte> Keccak<hash_size, c, dom>::squeeze() noexcept
 
 //====== Enhanced class of SHA3 specification ======
 // Application of the IUF concept (Init/Update/Finalize)
-template<DigestSize hash_size, Capacity c, Domain dom>
-class IUFKeccak : public Keccak<hash_size, c, dom>
+class IUFKeccak : public Keccak
 {   // The class is designed to process input messages with a length
     // multiple of 8 (i.e. byte-oriented messages)
     using str_const_iter = std::string::const_iterator;
 public:
+    IUFKeccak() = delete;
     IUFKeccak(const IUFKeccak&) = delete;    // copy/move constructors in undef
     IUFKeccak(const IUFKeccak&&) = delete;
     IUFKeccak& operator=(IUFKeccak&) = delete; // copy/move assignment is undef
     IUFKeccak& operator=(IUFKeccak&&) = delete;
 
-    explicit IUFKeccak()
-    : rate_in_bytes_(this->rate_ / k8Bits)  {  init();  }
+    explicit IUFKeccak(KeccParam param)
+    : Keccak(param), rate_in_bytes_(this->rate_ / k8Bits), separator_(0)
+    {  init();  }
     ~IUFKeccak() {}
 
     //------ Main Interface ------
@@ -302,24 +312,25 @@ public:
     size_t update(const std::string& data); // wrapper function
     std::vector<byte> finalize() noexcept;
 
+    void set_separator(const char sep) noexcept   {  separator_ = sep;  }
+
+    friend std::ostream& operator<<(std::ostream& out, chash::IUFKeccak& obj);
+
 private:		// Class Data Members
     size_t rate_in_bytes_;
     size_t byte_absorbed_;
     char   separator_;
 }; // end for class IUFKeccak declaration
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-void IUFKeccak<hash_size, c, dom>::init() noexcept
+//-----------------------------
+void IUFKeccak::init() noexcept
 {
     byte_absorbed_ = 0;
     this->reset_state();
 } // end init()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-size_t IUFKeccak<hash_size, c, dom>::update(const str_const_iter start, 
-                                            const str_const_iter end)
+//----------------------------------------------------------------------------
+size_t IUFKeccak::update(const str_const_iter start, const str_const_iter end)
 {   // Update State based on input data
     if (start >= end)
         return (0);
@@ -347,16 +358,14 @@ size_t IUFKeccak<hash_size, c, dom>::update(const str_const_iter start,
     return (len);
 } // end update()
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-size_t IUFKeccak<hash_size, c, dom>::update(const std::string& data)
+//-----------------------------------------------
+size_t IUFKeccak::update(const std::string& data)
 {   // Wrapper function
     return (update(data.begin(), data.end()));
 }
 
-//----------------------------------------------------
-template<DigestSize hash_size, Capacity c, Domain dom>
-std::vector<byte> IUFKeccak<hash_size, c, dom>::finalize() noexcept
+//----------------------------------------------
+std::vector<byte> IUFKeccak::finalize() noexcept
 {   // Add domain separation and padding, return digest
     this->st_raw_[byte_absorbed_ % rate_in_bytes_] ^= this->domain_;
     this->st_raw_[rate_in_bytes_ - 1] ^= 0x80;
@@ -365,23 +374,29 @@ std::vector<byte> IUFKeccak<hash_size, c, dom>::finalize() noexcept
 
     return(this->squeeze());
 } // end finalize()
+
+//------ Overload output for IUFKeccak ------
+std::ostream& operator<<(std::ostream& out, chash::IUFKeccak& obj)
+{
+    std::vector<chash::byte> digest = obj.finalize();
+    char prev_fill = out.fill('0');
+    out << std::hex;
+    for(size_t i = 0; i < digest.size(); i++) {
+        out << std::setw(2) << static_cast<int>(digest[i]);
+        if(obj.separator_ and (i+1 != digest.size()))
+            out << obj.separator_;
+    }
+    out.fill(prev_fill);
+    out << std::flush << std::dec;
+    return (out);
+} // end
+
 //====== end for class IUFKeccak definition ======
 
-
-//------ Predefined Aliases ------
-using SHA3_224 = Keccak<kD_224, kC_448, kSHA3>;     // SHA3
-using SHA3_256 = Keccak<kD_256, kC_512, kSHA3>;
-using SHA3_384 = Keccak<kD_384, kC_768, kSHA3>;
-using SHA3_512 = Keccak<kD_512, kC_1024, kSHA3>;
-using SHAKE128 = Keccak<kD_128, kC_256, kSHAKE>;    // SHAKE
-using SHAKE256 = Keccak<kD_256, kC_512, kSHAKE>;
-
-using SHA3_224_IUF = IUFKeccak<kD_224, kC_448, kSHA3>;  // SHA3 (IUF concept)
-using SHA3_256_IUF = IUFKeccak<kD_256, kC_512, kSHA3>;
-using SHA3_384_IUF = IUFKeccak<kD_384, kC_768, kSHA3>;
-using SHA3_512_IUF = IUFKeccak<kD_512, kC_1024, kSHA3>;
-using SHAKE128_IUF = IUFKeccak<kD_128, kC_256, kSHAKE>; // SHAKE (IUF concept)
-using SHAKE256_IUF = IUFKeccak<kD_256, kC_512, kSHAKE>;
+//------ TYPES ALIASES ------
+using SHA3 = Keccak;
+using SHA3_IUF = IUFKeccak;
+using SHA3Param = KeccParam;
 
 } // end namespace "chash"
 
