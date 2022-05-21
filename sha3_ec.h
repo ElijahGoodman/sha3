@@ -21,45 +21,52 @@ typedef unsigned long long 	size_t;
 typedef unsigned char 		byte;
 
 //------ STRUCTS / ENUMS / CONSTANTS ------
-enum DigestSize : size_t {
+enum class HashSize {
     kD_128 = 128, kD_224 = 224, kD_256 = 256, kD_384 = 384, kD_512 = 512,
-    kD_max = 524280ULL      // Max digest size in bits (2^16 - 1 bytes)
+    kD_max = 524280      // Max digest size in bits (2^16 - 1 bytes)
 };
-enum Capacity: size_t {
+enum class Capacity {
     kC_256 = 256, kC_448 = 448, kC_512 = 512, kC_768 = 768, kC_1024 = 1024
 };
-enum Domain : int_t {
+enum class Domain : int_t {
     kDomSHA3 = 0b110, kDomSHAKE = 0b11111
 };
 
 struct KeccParam {   // KECCAK parameters
-    explicit KeccParam()
-    : d_size(kD_256), cap(kC_512), dom(kDomSHA3)
+    explicit KeccParam()        // default - SHA3-256
+    : hash_size(HashSize::kD_256), cap(Capacity::kC_512), dom(Domain::kDomSHA3)
     {}
-    explicit KeccParam(chash::DigestSize hs, chash::Capacity c, chash::Domain d)
-        : d_size(hs), cap(c), dom(d)
+    explicit KeccParam(chash::HashSize hs, chash::Capacity c, chash::Domain d)
+        : hash_size(hs), cap(c), dom(d)
     {}
+    KeccParam& operator=(KeccParam other)
+    {
+        this->hash_size = other.hash_size;
+        this->cap = other.cap;
+        this->dom = other.dom;
+        return *this;
+    }
 public:
-    chash::DigestSize   d_size;
+    chash::HashSize     hash_size;
     chash::Capacity     cap;
     chash::Domain       dom;
 };
 
-const KeccParam kSHA3_224{kD_224, kC_448, kDomSHA3};
-const KeccParam kSHA3_256{kD_256, kC_512, kDomSHA3};
-const KeccParam kSHA3_384{kD_384, kC_768, kDomSHA3};
-const KeccParam kSHA3_512{kD_512, kC_1024, kDomSHA3};
-const KeccParam kSHAKE128(kD_128, kC_256, kDomSHAKE);
-const KeccParam kSHAKE256(kD_256, kC_512, kDomSHAKE);
+const KeccParam kSHA3_224{HashSize::kD_224, Capacity::kC_448, Domain::kDomSHA3};
+const KeccParam kSHA3_256{HashSize::kD_256, Capacity::kC_512, Domain::kDomSHA3};
+const KeccParam kSHA3_384{HashSize::kD_384, Capacity::kC_768, Domain::kDomSHA3};
+const KeccParam kSHA3_512{HashSize::kD_512, Capacity::kC_1024, Domain::kDomSHA3};
+const KeccParam kSHAKE128(HashSize::kD_128, Capacity::kC_256, Domain::kDomSHAKE);
+const KeccParam kSHAKE256(HashSize::kD_256, Capacity::kC_512, Domain::kDomSHAKE);
 
 static const int_t k8Bits = 8;
 static constexpr int_t kIntSize = sizeof(int_t);
 
 static_assert(8==kIntSize, "Type 'long long int' must been at least 8 bytes!");
 
-static const size_t kStateSize = 25;
+static const int    kStateSize = 25;
 static const size_t kKeccakWidth = 1600;    // in bits
-static const size_t kRounds = 24;
+static const int    kRounds = 24;
 static const size_t kLaneSize = 64;         // lane size in bits
 
 static const size_t kRhoOffset[kStateSize] = {  // offsets for RHO step mapping
@@ -117,7 +124,7 @@ protected:
 
     //------ Basic KECCAK functions ------
     inline void reset_state() noexcept {
-        for (size_t i = 0; i < kStateSize; i++)
+        for (int i = 0; i < kStateSize; i++)
             st_[i] = 0;
     }
     void keccap_p() noexcept;
@@ -132,25 +139,23 @@ protected:
         int_t st_[kStateSize];                      // State (5 * 5 * w)
         byte  st_raw_[kStateSize * sizeof(int_t)];  // State as byte array
     };
-    size_t digest_size_;
+    size_t hash_size_;
     size_t capacity_;
     size_t rate_;
-    size_t rounds_;
     int_t  domain_;		// domain separation suffix
     size_t suf_len_;	// length in bits of the suffix
 };  // end for class "Keccak" declaration
 
 //-----------------------------
 Keccak::Keccak(KeccParam param)
-:   digest_size_(param.d_size),
-    capacity_(param.cap),
-    rounds_(kRounds),
-    domain_(param.dom)
+:   hash_size_(static_cast<size_t>(param.hash_size)),
+    capacity_(static_cast<size_t>(param.cap)),
+    domain_(static_cast<int_t>(param.dom))
 {
     rate_ = kKeccakWidth - capacity_;
-    if (kDomSHA3 == param.dom)
+    if (Domain::kDomSHA3 == param.dom)
         suf_len_ = 2;
-    else if (kDomSHAKE == param.dom)
+    else if (Domain::kDomSHAKE == param.dom)
         suf_len_ = 4;
 } // end Keccak()
 
@@ -169,8 +174,8 @@ std::vector<byte> Keccak::get_digest(const std::string& msg,
 bool Keccak::set_digest_size(const size_t hash_size_in_bits) noexcept
 {   // (!) For SHAKE functions ONLY, has no effect for SHA3 functions.
     // WARNING: digest size is limited by kD_max (max hash size)
-    if (kDomSHAKE == domain_) {
-        digest_size_ = hash_size_in_bits % kD_max;
+    if (static_cast<int_t>(Domain::kDomSHAKE) == domain_) {
+        hash_size_ = hash_size_in_bits % static_cast<size_t>(HashSize::kD_max);
         return (true);
     }
     else
@@ -180,7 +185,8 @@ bool Keccak::set_digest_size(const size_t hash_size_in_bits) noexcept
 //------------------------------------------
 std::string Keccak::get_hash_type() noexcept
 {   // return the type of hash function, i.e. "SHA3-224", "SHA3-256"...
-    std::string hash_type = (kDomSHA3==domain_) ? "SHA3-" : "SHAKE";
+    std::string hash_type = 
+        (static_cast<int_t>(Domain::kDomSHA3)==domain_) ? "SHA3-" : "SHAKE";
     hash_type += std::to_string(capacity_/2);
     return (hash_type);
 }
@@ -212,7 +218,7 @@ std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
 //------------------------------
 void Keccak::keccap_p() noexcept
 {   // Underlying KECCAK permutation
-    for (size_t rc = 0; rc < kRounds; rc++) {
+    for (int rc = 0; rc < kRounds; rc++) {
         // THETA
         int_t sht[5] = {0};             // "sheet"
         for (int x = 0; x < 5; x++) {   // traverse through sheets
@@ -225,13 +231,13 @@ void Keccak::keccap_p() noexcept
         }
         // RHO & PI
         int_t lane1 = rotl(st_[1], kRhoOffset[1]);
-        for (size_t i = 0; i < kStateSize-2; i++) {
+        for (int i = 0; i < kStateSize-2; i++) {
             st_[kPiJmp[i]] = rotl(st_[kPiJmp[i + 1]],
                 kRhoOffset[kPiJmp[i + 1]]);
         }
         st_[kPiJmp[23]] = lane1;
         // CHI
-        for (size_t y = 0; y < kStateSize; y += 5) {   // traverse through rows
+        for (int y = 0; y < kStateSize; y += 5) {   // traverse through rows
             sht[0] = st_[y];
             sht[1] = st_[y + 1];
             for (int x = 0; x < 3; x++) {
@@ -269,15 +275,15 @@ void Keccak::absorb(const byte* start, const byte* end, size_t size) noexcept
 std::vector<byte> Keccak::squeeze() noexcept
 {   // Squeezing's part of the "sponge" construction.
     // Getting the message digest (hash)
-    size_t rem = digest_size_ % k8Bits;
-    std::vector<byte> digest(digest_size_/k8Bits + (rem ? 1 : 0), 0);
+    size_t rem = hash_size_ % k8Bits;
+    std::vector<byte> digest(hash_size_/k8Bits + (rem ? 1 : 0), 0);
     size_t squeezed = 0;
-    for (size_t i = 0; i < (digest_size_/rate_ + 1); i++) {
-        size_t block_size = std::min((digest_size_ - squeezed), rate_);
+    for (size_t i = 0; i < (hash_size_/rate_ + 1); i++) {
+        size_t block_size = std::min((hash_size_ - squeezed), rate_);
         for (size_t j = squeezed; j < squeezed + block_size; j += k8Bits)
             digest[j / k8Bits] = st_raw_[(j - squeezed)/k8Bits];
         squeezed += block_size;
-        if (squeezed < digest_size_)
+        if (squeezed < hash_size_)
             keccap_p();
     }
     // If digest size in bits not multiple by 8
