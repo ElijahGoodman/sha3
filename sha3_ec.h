@@ -62,7 +62,7 @@ const KeccParam kSHAKE256(HashSize::kD_256, Capacity::kC_512, Domain::kDomSHAKE)
 static const int_t k8Bits = 8;
 static constexpr int_t kIntSize = sizeof(int_t);
 
-static_assert(8==kIntSize, "Type 'long long int' must been at least 8 bytes!");
+static_assert(8==kIntSize, "Type 'long long int' must been 8 bytes!");
 
 static const int    kStateSize = 25;
 static const size_t kKeccakWidth = 1600;    // in bits
@@ -316,6 +316,8 @@ public:
     void init() noexcept;
     size_t update(const str_const_iter start, const str_const_iter end);
     size_t update(const std::string& data); // wrapper function
+    size_t update(const char* data, const size_t size); // WARNING: UNSAFE!!!
+
     std::vector<byte> finalize() noexcept;
 
     void set_separator(const char sep) noexcept   {  separator_ = sep;  }
@@ -338,15 +340,27 @@ void IUFKeccak::init() noexcept
 //----------------------------------------------------------------------------
 size_t IUFKeccak::update(const str_const_iter start, const str_const_iter end)
 {   // Update State based on input data
-    if (start >= end)
+    return (update(&(*start), end - start));
+} // end update()
+
+//-----------------------------------------------
+size_t IUFKeccak::update(const std::string& data)
+{   // Wrapper function
+    return (update(&data.front(), data.length()));
+}
+//-----------------------------------------------------------
+size_t IUFKeccak::update(const char* data, const size_t size)
+{   // WARNING: UNSAFE!!!
+    // Update State based on input data
+    if (nullptr == data)
         return (0);
-    const size_t len = end - start;
+    const size_t len = size;
     size_t left_to_process = len;
     size_t block_size = std::min(len, rate_in_bytes_ - byte_absorbed_);
-    str_const_iter block = start;
+    const char* block = data;
 
     while (left_to_process) {
-        for (str_const_iter cur = block; cur != block + block_size; cur++) {
+        for (const char* cur = block; cur != block + block_size; cur++) {
             this->st_raw_[byte_absorbed_ + (cur - block)] ^= *cur;
         }
         byte_absorbed_ += block_size;
@@ -362,13 +376,7 @@ size_t IUFKeccak::update(const str_const_iter start, const str_const_iter end)
     } // end while(left_to_process)
 
     return (len);
-} // end update()
-
-//-----------------------------------------------
-size_t IUFKeccak::update(const std::string& data)
-{   // Wrapper function
-    return (update(data.begin(), data.end()));
-}
+} // end update(...)
 
 //----------------------------------------------
 std::vector<byte> IUFKeccak::finalize() noexcept
