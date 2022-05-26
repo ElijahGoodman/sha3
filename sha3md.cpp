@@ -11,6 +11,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <exception>
 
 //=============================================================================
 enum ErrCode { kOk = 0, kError};
@@ -22,8 +23,8 @@ static int print_summary(int exit_code)
         << "\n  file...         Files to digest (default is stdin)"
         << "\n[OPTIONS]"
         << "\n  --help          Display this summary"
-        << "\n  -[hash_type]    Hash type : SHA3-224, SHA3-256, SHA3-384"
-        << "\n                              SHA3-512, SHAKE128, SHAKE256"
+        << "\n  -[hash_type]    Hash type : sha3-224, sha3-256, sha3-384"
+        << "\n                              sha3-512, shake128, shake256"
         << "\n  -len digestlen  FOR SHAKE ONLY : length of a digest(in bits!)"
         << "\n  -out outfile    Output to file rather than stdout"
         << "\n  -sep 'sep'      Byte separator character in output string"
@@ -32,8 +33,8 @@ static int print_summary(int exit_code)
         << "\n  0               Successful completion"
         << "\n  1               An error occures"
         << "\nEXAMPLES:"
-        << "\n  sha3md -SHA3-256 -sep ':' file1.bin some_app.exe"
-        << "\n  sha3md -SHAKE128 -len 213 -out sha3.sum 'I wanna hashing.pdf'"
+        << "\n  sha3md -sha3-256 -sep ':' file1.bin some_app.exe"
+        << "\n  sha3md -shake128 -len 213 -out sha3.sum 'I wanna hashing.pdf'"
         << std::endl;
     return (exit_code);
 } // end print_summary()
@@ -55,16 +56,17 @@ public:
 private:
     int check_param(const char* arg) const;
     chash::SHA3Param set_hash_type(int hash_type);
-    chash::size_t set_length(const char* param);
+    chash::size_t set_length(const std::string &param);
     int set_input_files();
     int update_hash_from_stream(const istream_ptr& is, buf_type& buffer,
                                 chash::SHA3_IUF& obj);
 private:
-    const int block_size_ = 1024 * 1024;  // reading block size (8MB)
-    chash::SHA3Param sha3_param_;
-    chash::size_t hash_length_;
     std::vector<std::string> input_from_;
     ostream_ptr output_to_;
+    chash::SHA3Param sha3_param_;
+    chash::size_t hash_length_;
+    const chash::size_t mem_page_size_ = 4096;
+    chash::size_t block_size_;
     bool ready_;
     bool uppercase_;
     char separator_;
@@ -79,17 +81,29 @@ int main(int argc, const char* argv[])
         return (print_summary(kOk));
     }
     SHA3Hash hash;
-    if(kError == hash.set_param(argc, argv))
+    try {
+        hash.set_param(argc, argv);
+    }
+    catch(std::string &error) {
+        std::cerr << error << std::endl;
         return (kError);
+    }
+    catch(...) {
+        std::cerr << "An error occurred! Program terminates." << std::endl;
+        return (kError);
+    }
     return (hash.print_digest());
 } // end main(...)
-
 //=============================================================================
+//*****************************************************************************
+//=============================================================================
+
 //------ Class SHA3Hash ------
 SHA3Hash::SHA3Hash()
-:   sha3_param_(chash::kSHA3_256),      // default - use SHA3-256
+:   output_to_({ &std::cout, [](auto) {} }),
+    sha3_param_(chash::kSHA3_256),              // default - use SHA3-256
     hash_length_(0),
-    output_to_({ &std::cout, [](auto) {} }),
+    block_size_(mem_page_size_),
     ready_(false),
     uppercase_(false),
     separator_(0)
@@ -111,22 +125,21 @@ int SHA3Hash::set_param(const int argc, const char* argv[])
         case shake128:
         case shake256:
             sha3_param_ = set_hash_type(res);
-            ready_ = true;
+            ready_ = true;      // Ready to hashing only if hash type specified
             break;
         case len:                           // '-len digestlen'
-            if ((arg_num + 1) != argc) {
+            if (((arg_num+1)!=argc) and std::isdigit(argv[arg_num+1][0])) {
                 hash_length_ = set_length(argv[arg_num + 1]);
                 if (!hash_length_)
                     return(kError);         // if 'digestlen' not specified
                 arg_num++;
-            } else {
-                std::cerr << "Digest length not specified!\n";
-                return (kError);
             }
+            else
+                throw std::string("Digest length not specified!");
             break;
         case out:                           // '-out outfile'
-            if ((arg_num + 1) != argc) {
-                output_to_ = { new std::ofstream(argv[arg_num + 1], std::ios::out),
+            if (((arg_num+1)!= argc) and (argv[arg_num+1][0]!='-')) {
+                output_to_ = { new std::ofstream(argv[arg_num+1], std::ios::out),
                                         [](std::ostream* p) {delete p; } };
                 if (!(*output_to_)) {
                     std::cerr << "Error opening file '"
@@ -134,19 +147,17 @@ int SHA3Hash::set_param(const int argc, const char* argv[])
                     return (kError);
                 }
                 arg_num++;
-            } else {
-                std::cerr << "Outfile is not specified!\n";
-                return (kError);
             }
+            else
+                throw std::string("Outfile not specified! Use 'sha3sum --help' for help.");
             break;
         case sep:                         // '-sep character'
-            if ((arg_num + 1) != argc) {
+            if (((arg_num+1)!=argc) and (argv[arg_num+1][0]!='-')) {
                 separator_ = argv[arg_num + 1][0];
                 arg_num++;
-            } else {
-                std::cerr << "Option '-sep' was declared, but no symbol was specified!\n";
-                return (kError);
             }
+            else
+                throw std::string("Option '-sep' was declared, but no symbol was specified!");
             break;
         case upper:
             uppercase_ = true;
@@ -158,14 +169,13 @@ int SHA3Hash::set_param(const int argc, const char* argv[])
                     input_from_.push_back(argv[arg_num]);
                     arg_num++;
                 }
-            } else {
-                std::cerr << "Incorrect parameters!\n"
-                          << "Use 'sha3sum --help' for help." << std::endl;
-                return (kError);
             }
+            else
+                throw std::string("Incorrect parameters! Use 'sha3sum --help' for help.");
+            break;
         default:
-            static_assert(true, "Critical Error: unknown parameter!");
-        } // end swithc(check_param)
+            throw std::string("Error: unknown parameter!");
+        } // end switch(check_param)
         arg_num++;
     } // end while (arg_num)
     return (kOk);
@@ -174,19 +184,30 @@ int SHA3Hash::set_param(const int argc, const char* argv[])
 //--------------------------
 int SHA3Hash::print_digest()
 {
+    if(!ready_) {
+        std::cerr << "SHA3 settings not configured!" << std::endl;
+        return (kError);
+    }
     chash::SHA3_IUF sha3_obj(sha3_param_);
+
     if (separator_)
         sha3_obj.set_separator(separator_);
+
     if (hash_length_ != 0)
         sha3_obj.set_digest_size(hash_length_);
+
+    block_size_ = sha3_obj.get_rate() * mem_page_size_;
+
     buf_type buf = std::make_unique<char[]>(block_size_);
     for (const std::string &ifname : input_from_) { // Input files processing
         istream_ptr in_stream{ nullptr, [](auto) {} };
         if ("stdin" == ifname)           // If the input file is not specified
             in_stream = { &std::cin, [](auto) {} };    // use standard input
-        else
-            in_stream = { new std::ifstream(ifname, (std::ios_base::in | std::ios_base::binary)), 
-                                            [](std::istream* p) {delete p; } };
+        else {
+            auto flags = std::ios_base::in | std::ios_base::binary;
+            in_stream = { new std::ifstream(ifname, flags),
+                          [](std::istream* p) { delete p; } };
+        }
         if (*in_stream) {
             sha3_obj.init();                // init hash object
             int res = update_hash_from_stream(in_stream, buf, sha3_obj);
@@ -210,9 +231,9 @@ int SHA3Hash::check_param(const char* arg) const
 {
     // Reference parameters
     static const std::map<int, std::string> ref_params = {
-        {sha3_224, "-SHA3-224"}, {sha3_256, "-SHA3-256"}, 
-        {sha3_384, "-SHA3-384"}, {sha3_512, "-SHA3-512"}, 
-        {shake128, "SHAKE128"}, {shake256, "SHAKE256"},
+        {sha3_224, "-sha3-224"}, {sha3_256, "-sha3-256"},
+        {sha3_384, "-sha3-384"}, {sha3_512, "-sha3-512"},
+        {shake128, "-shake128"}, {shake256, "-shake256"},
         {len, "-len"}, {out, "-out"}, {sep, "-sep"}, {upper, "-u"}
     };
     int res = bad_param;
@@ -245,16 +266,24 @@ chash::SHA3Param SHA3Hash::set_hash_type(int hash_type)
 } // end SHA3Hash::set_hash_type(...)
 
 //---------------------------------------------------
-chash::size_t SHA3Hash::set_length(const char* param)
+chash::size_t SHA3Hash::set_length(const std::string &param)
 {
     chash::size_t len = 0;
     try {
         len = std::stoll(param);
     }
-    catch (std::exception const& ex) {
+    catch(std::invalid_argument const& ex) {
+        std::cerr << "Length parameter: invalid argument!" << std::endl;
+        throw;
+    }
+    catch(std::out_of_range const& ex){
+        std::cerr << "Length specified incorrect: out_of_range!" << std::endl;
+        throw;
+    }
+    catch (...) {
         std::cerr << "Invalid parameter (digest length)!\n"
             << "Use 'sha3md --help' for help." << std::endl;
-        return (0);
+        throw;
     }
     return (len);
 } // end SHA3Hash::set_length(...)
@@ -269,7 +298,8 @@ int SHA3Hash::update_hash_from_stream(const istream_ptr& is, buf_type &buffer,
             std::cerr << "Error reading from file!\n";
             return (kError);
         }
-        obj.update(buffer.get(), is->gcount()); // update hash
+        //obj.update(buffer.get(), is->gcount()); // update hash
+        obj.update_fast(buffer.get(), is->gcount()); // update hash
     }
     return (kOk);
 } // end SHA3Hash::update_hash_from_stream()

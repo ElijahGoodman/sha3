@@ -44,7 +44,7 @@ struct KeccParam {   // KECCAK parameters
         this->hash_size = other.hash_size;
         this->cap = other.cap;
         this->dom = other.dom;
-        return *this;
+        return (*this);
     }
 public:
     chash::HashSize     hash_size;
@@ -68,6 +68,7 @@ static const int    kStateSize = 25;
 static const size_t kKeccakWidth = 1600;    // in bits
 static const int    kRounds = 24;
 static const size_t kLaneSize = 64;         // lane size in bits
+static const int_t  kIntMax = 0xFFFFFFFFFFFFFFFFULL;
 
 static const size_t kRhoOffset[kStateSize] = {  // offsets for RHO step mapping
      0,  1, 62, 28, 27,
@@ -114,20 +115,20 @@ public:
     ~Keccak() {};
 
     //------ Main Interface ------
+    std::vector<byte> get_digest(const char* msg, const size_t len_in_bits);
     std::vector<byte> get_digest(const std::string& msg, size_t len_in_bits)
                                      noexcept;  // wrapper function
     bool set_digest_size(const size_t digest_size_in_bits) noexcept;
     std::string get_hash_type() noexcept;
+    size_t get_rate() const {  return (rate_); }
 
 protected:
-    std::vector<byte> get_digest(const char* msg, const size_t len_in_bits);
-
     //------ Basic KECCAK functions ------
     inline void reset_state() noexcept {
         for (int i = 0; i < kStateSize; i++)
             st_[i] = 0;
     }
-    void keccap_p() noexcept;
+    void keccak_p() noexcept;
     std::vector<byte> squeeze() noexcept;
 
 private:
@@ -139,9 +140,9 @@ protected:
         int_t st_[kStateSize];                      // State (5 * 5 * w)
         byte  st_raw_[kStateSize * sizeof(int_t)];  // State as byte array
     };
-    size_t hash_size_;
-    size_t capacity_;
-    size_t rate_;
+    size_t hash_size_;  // in bits
+    size_t capacity_;   // in bits
+    size_t rate_;       // in bits
     int_t  domain_;		// domain separation suffix
     size_t suf_len_;	// length in bits of the suffix
 };  // end for class "Keccak" declaration
@@ -193,7 +194,7 @@ std::string Keccak::get_hash_type() noexcept
 
 //-----------------------------------------------------------------------------
 std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
-{   // Return the digest of <msg>
+{   // Return the digest of <msg> (UNSAFE! Memory control needed.)
     // The caller must guarantee that the <msg> is available and valid
     // 0. Preparing
     //      in PAD(10*1) obligatory add "11", i.e. two bits
@@ -216,35 +217,35 @@ std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
 } // end get_digest(const char* msg,...)
 
 //------------------------------
-void Keccak::keccap_p() noexcept
+void Keccak::keccak_p() noexcept
 {   // Underlying KECCAK permutation
     for (int rc = 0; rc < kRounds; rc++) {
         // THETA
-        int_t sht[5] = {0};             // "sheet"
-        for (int x = 0; x < 5; x++) {   // traverse through sheets
-            sht[x] ^= st_[x] ^ st_[x+5] ^ st_[x+10] ^ st_[x+15] ^ st_[x+20];
+        int_t sht_l[5];             // "sheet"
+        int_t sht_r[5];
+        for (int x = 0; x < 5; x++) {    // traverse through sheets
+            sht_l[x] = st_[x]^st_[x+5]^st_[x+10]^st_[x+15]^st_[x+20];
+            sht_r[x] = rotl(sht_l[x],1);
         }
         for (int x = 0; x < 5; x++) {
-            for (int y = 0; y < 5; y++) {
-                st_[x + y*5] ^= sht[(x + 4)%5] ^ rotl(sht[(x + 1) % 5], 1);
-            }
+            for (int y = 0; y < 5; y++)
+                st_[x + y*5] ^= sht_l[(x+4)%5] ^ sht_r[(x+1) % 5];
         }
         // RHO & PI
         int_t lane1 = rotl(st_[1], kRhoOffset[1]);
-        for (int i = 0; i < kStateSize-2; i++) {
-            st_[kPiJmp[i]] = rotl(st_[kPiJmp[i + 1]],
-                kRhoOffset[kPiJmp[i + 1]]);
-        }
+        for (int i = 0; i < kStateSize-2; i++)
+            st_[kPiJmp[i]] = rotl(st_[kPiJmp[i+1]], kRhoOffset[kPiJmp[i+1]]);
         st_[kPiJmp[23]] = lane1;
         // CHI
         for (int y = 0; y < kStateSize; y += 5) {   // traverse through rows
-            sht[0] = st_[y];
-            sht[1] = st_[y + 1];
+            sht_l[0] = st_[y];
+            sht_l[1] = st_[y+1];
             for (int x = 0; x < 3; x++) {
-                st_[y + x] ^= (~st_[y + (x + 1)]) & st_[y + (x + 2)];
+                //st_[y+x] ^= (~st_[y+(x+1)]) & st_[y+(x+2)];
+                st_[y+x] ^= (st_[y+(x+1)] ^ kIntMax) & st_[y+(x+2)];
             }
-            st_[y + 3] ^= (~st_[y + 4]) & sht[0];
-            st_[y + 4] ^= (~sht[0]) & sht[1];
+            st_[y+3] ^= (~st_[y+4]) & sht_l[0];
+            st_[y+4] ^= (~sht_l[0]) & sht_l[1];
         }
         // IOTA
         st_[0] ^= kIotaRc[rc];
@@ -268,7 +269,7 @@ void Keccak::absorb(const byte* start, const byte* end, size_t size) noexcept
         // add last byte of padding
         st_raw_[(rate_ / k8Bits) - 1] ^= 0x80;
     }
-    keccap_p();
+    keccak_p();
 } // end absorb()
 
 //------------------------------------------
@@ -284,7 +285,7 @@ std::vector<byte> Keccak::squeeze() noexcept
             digest[j / k8Bits] = st_raw_[(j - squeezed)/k8Bits];
         squeezed += block_size;
         if (squeezed < hash_size_)
-            keccap_p();
+            keccak_p();
     }
     // If digest size in bits not multiple by 8
     if(rem)
@@ -314,14 +315,16 @@ public:
 
     //------ Main Interface ------
     void init() noexcept;
-    size_t update(const str_const_iter start, const str_const_iter end);
-    size_t update(const std::string& data); // wrapper function
     size_t update(const char* data, const size_t size); // WARNING: UNSAFE!!!
-
+    size_t update_fast(const char* data, const size_t size);
     std::vector<byte> finalize() noexcept;
 
-    void set_separator(const char sep) noexcept   {  separator_ = sep;  }
+    // Wrapper functions
+    size_t update(const str_const_iter start, const str_const_iter end);
+    size_t update(const std::string& data);
 
+    // Utility functions
+    void set_separator(const char sep) noexcept   {  separator_ = sep;  }
     friend std::ostream& operator<<(std::ostream& out, chash::IUFKeccak& obj);
 
 private:		// Class Data Members
@@ -348,15 +351,38 @@ size_t IUFKeccak::update(const std::string& data)
 {   // Wrapper function
     return (update(&data.front(), data.length()));
 }
+
+//-----------------------------------------------------------
+size_t IUFKeccak::update_fast(const char* data, const size_t size)
+{   // Some optimization for loading data into State
+    size_t rate_in_8byte = rate_in_bytes_ / kIntSize; // rate as array of int_t
+    size_t left_to_process = size;
+
+    // For the case when the data block is absorbed by the state starting
+    // from st_[0] (i.e. byte_absorbed_ == 0), and the block size is equal
+    // to the rate: we absorb by 8 bytes at once (as an 8 byte integer)
+    if(!byte_absorbed_ and (left_to_process/rate_in_8byte)) {
+        const int_t* block = reinterpret_cast<const int_t*>(data);
+        while(left_to_process > rate_in_bytes_) {
+            for(size_t i = 0; i < rate_in_8byte; i++)
+                st_[i] ^= block[i];
+            block += rate_in_8byte;
+            left_to_process -= rate_in_bytes_;
+            this->keccak_p();
+        }
+    }
+    // The remaining bytes are absorbed in a simple way (byte by byte)
+    return (update(data + (size - left_to_process), left_to_process));
+} // end IUFKeccak::update_fast()
+
 //-----------------------------------------------------------
 size_t IUFKeccak::update(const char* data, const size_t size)
-{   // WARNING: UNSAFE!!!
+{   // WARNING: UNSAFE function (raw pointer 'data', memory control needed)!!!
     // Update State based on input data
     if (nullptr == data)
         return (0);
-    const size_t len = size;
-    size_t left_to_process = len;
-    size_t block_size = std::min(len, rate_in_bytes_ - byte_absorbed_);
+    size_t left_to_process = size;
+    size_t block_size = std::min(left_to_process, rate_in_bytes_-byte_absorbed_);
     const char* block = data;
 
     while (left_to_process) {
@@ -365,7 +391,7 @@ size_t IUFKeccak::update(const char* data, const size_t size)
         }
         byte_absorbed_ += block_size;
         if (byte_absorbed_ == rate_in_bytes_) {
-            this->keccap_p();
+            this->keccak_p();
             byte_absorbed_ = 0;
         }
         left_to_process -= block_size;
@@ -374,8 +400,7 @@ size_t IUFKeccak::update(const char* data, const size_t size)
             block_size = std::min(left_to_process, rate_in_bytes_);
         }
     } // end while(left_to_process)
-
-    return (len);
+    return (size);
 } // end update(...)
 
 //----------------------------------------------
@@ -384,7 +409,7 @@ std::vector<byte> IUFKeccak::finalize() noexcept
     this->st_raw_[byte_absorbed_ % rate_in_bytes_] ^= this->domain_;
     this->st_raw_[rate_in_bytes_ - 1] ^= 0x80;
 
-    this->keccap_p();       // Last permutation
+    this->keccak_p();       // Last permutation
 
     return(this->squeeze());
 } // end finalize()
