@@ -217,7 +217,7 @@ std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
 {   // Return the digest of <msg> (UNSAFE! Memory control needed.)
     // The caller must guarantee that the <msg> is available and valid
     if(!msg)
-        return (nullptr);
+        return (std::vector<byte>());
     // 0. Preparing
     //      in PAD(10*1) obligatory add "11", i.e. two bits
     size_t total_len = len_in_bits + suf_len_ + 2;
