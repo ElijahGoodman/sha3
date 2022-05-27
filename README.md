@@ -1,23 +1,35 @@
-# **Implementation of SHA-3 (SECURE HASH ALGORITM)**
+# **Simple implementation of SHA3 hash algorithm**
 
-working in progress...
+This simple C++ single-header implementation of the SHA-3 algorithm is based on FIPS 202
+[SHA-3 Standard: Permutation-Based Hash and Extendable-Output Functions](https://github.com)
 
-# Header 1
+## Language features and tools
 
-## Header 2
+This implementation has been developed and tested with:
+ * ISO C++14 and higher.
+ * GCC compiler (v10.3.0) / MSVC++ 14.28 (Visual Studio 2019).
 
-### Header 3
+Next IDEs was used:
+ * Eclipse CPP (for Windows, using MinGW64).
+ * MS Visual Studio 2019. 
 
-#### Header 4
+## Overview
 
- Some important text
+In order to use this implementation in your project, include the header file
+`sha3_ec.h`. The specified file defines the namespace `chash` which includes
+two classes `Keccak` and `IUF_Keccak`.  For convenience and clarity, the 
+following aliases are used:
 
- > Here's a some quote that you might want to use sometimes to differentiate your text.
+    SHA3
+    SHA3_IUF
 
-List of
- * Item 1
- * Item 2
- * Item 3
+The first one (`SHA3`) is the base class, which provides a simple set of
+functions for getting a digest (hash) of a message. 
+The second class - `SHA3_IUF` - inherits from the base class and extends
+the functionality by adding additional functions, in particular, it provides
+the ability to use the IUF (Init/Update/Finalize) scheme to absorb input data
+part by part.
+
 
 **This is bold text**
 
@@ -29,9 +41,9 @@ List of
 
 ***All this text is important***
 
-Some code example (c-syntax)
+Some code example (cpp-syntax)
 
-```c
+```cpp
 #inlcude <iostream>
 
 int main(int, char**) {
@@ -39,9 +51,3 @@ int main(int, char**) {
     return 0;
 }
 ```
-
-[link to so awesome github](https://github.com)
-
-![link to beautifull NIST](https://www.nist.gov/sites/default/files/images/2022/03/14/Cyber-Anniversary-1200x248-v2.png)
-
-and so forth...
