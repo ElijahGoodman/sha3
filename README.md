@@ -30,12 +30,12 @@ following aliases are used:
 The first one - `SHA3` - is the base class, which provides a simple set of
 functions for getting a digest (hash) of a message.
 The second class - `SHA3_IUF` - inherits from the base class and extends
-the functionality by adding additional functions. In particular, `SHA3_IUF`
+the functionality by appending additional functions. In particular, `SHA3_IUF`
 provides the ability to use the IUF (Init/Update/Finalize) scheme to absorb
 input data block by block.
 
 Structure `SHA3Param` is used to initialize objects of
-the specified classes. On creation, the class object is initialized as **SHA3-256**.
+the specified classes. Instance of this class has the **SHA3-256** setup by default.
 All major SHA3 & SHAKE types are predefined as global constants:
 ```CPP
     const SHA3Param kSHA3_224;
@@ -100,11 +100,13 @@ For `SHA3_IUF` objects:
   * In function `get_digest`, the transmitted length of the data block (string)
   is indicated ***in bits***, while in function `update` and `update_fast`
   it is indicated ***in bytes***.
-  * In spite of functions `get_digets` and `update` can accept `const char*` as
+  * In spite of functions `get_digets` and `update` being able to accept `const char*` as
   arguments, I recommend using safer wrappers function that work with `std::string`
   or `std::string::const_iterator`.
   * Function `update_fast` can speed up the absorption of the block of data by
-  the **State**. To do this, the size of the block of data to be absorbed must
+  the **State**. To be absorbed faster, the size of the block of data must be
+  a multiple of the **rate**.
+  To do this, the size of the block of data to be absorbed must
   be a multiple of the **rate**. For example:
 ```cpp
     using namespace chash;  // Only for example :)
@@ -124,13 +126,13 @@ For `SHA3_IUF` objects:
 ## SHA3MD
 
 **sha3md** is a simple console application for getting a digest of a single
-message or a file. I tried to orient on the famous applications like **openssl**
-or **sha3sum**. Of course, **sha3md** works slower than the above tough guys.
-For speed up it's necessary to use SIMD and intrinsics (like SSE or AVX),
+message or a file. I took example from the famous applications like **openssl**
+or **sha3sum**. Of course, **sha3md** works slower than the tough guys mentioned
+above. For speed up it's necessary to use SIMD and intrinsics (like SSE or AVX),
 and this is a completely different story.
 
 The following example calculates SHA3-512 hash of all files in the current
-directory and store result to file digest_of_files.txt:
+directory and store result to the file `digest_of_files.txt`:
 
     $ ./sha3md -sha3-512 -out digest_of_files.txt &(ls)
 
@@ -140,7 +142,7 @@ Displaying an empty string digest:
     SHAKE128(stdin)= 7F:9C:2B:A4:E8:8F:82:7D:61:60:45:50:76:05:85:3E
 ## Conclusion.
 
-I would like to hope that this implementation can be useful to someone.
+I would like to hope that this implementation will be useful to someone.
 
 Best wishes!
 
