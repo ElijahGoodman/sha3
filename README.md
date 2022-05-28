@@ -105,9 +105,7 @@ For `SHA3_IUF` objects:
   or `std::string::const_iterator`.
   * Function `update_fast` can speed up the absorption of the block of data by
   the **State**. To be absorbed faster, the size of the block of data must be
-  a multiple of the **rate**.
-  To do this, the size of the block of data to be absorbed must
-  be a multiple of the **rate**. For example:
+  a multiple of the **rate**. For example:
 ```cpp
     using namespace chash;  // Only for example :)
 
