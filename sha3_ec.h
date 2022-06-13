@@ -45,39 +45,34 @@ enum class HashSize {
     kD_128 = 128, kD_224 = 224, kD_256 = 256, kD_384 = 384, kD_512 = 512,
     kD_max = 524280      // Max digest size in bits (2^16 - 1 bytes)
 };
-enum class Capacity {
-    kC_256 = 256, kC_448 = 448, kC_512 = 512, kC_768 = 768, kC_1024 = 1024
-};
 enum class Domain : int_t {
     kDomSHA3 = 0b110, kDomSHAKE = 0b11111
 };
 
 struct KeccParam {   // KECCAK parameters
     explicit KeccParam()        // default - SHA3-256
-    : hash_size(HashSize::kD_256), cap(Capacity::kC_512), dom(Domain::kDomSHA3)
+    :   hash_size(HashSize::kD_256), dom(Domain::kDomSHA3)
     {}
-    explicit KeccParam(chash::HashSize hs, chash::Capacity c, chash::Domain d)
-        : hash_size(hs), cap(c), dom(d)
+    explicit KeccParam(chash::HashSize hs, chash::Domain d)
+    :   hash_size(hs), dom(d)
     {}
     KeccParam& operator=(KeccParam other)
     {
         this->hash_size = other.hash_size;
-        this->cap = other.cap;
         this->dom = other.dom;
         return (*this);
     }
 public:
     chash::HashSize     hash_size;
-    chash::Capacity     cap;
     chash::Domain       dom;
 };
 
-const KeccParam kSHA3_224{HashSize::kD_224, Capacity::kC_448, Domain::kDomSHA3};
-const KeccParam kSHA3_256{HashSize::kD_256, Capacity::kC_512, Domain::kDomSHA3};
-const KeccParam kSHA3_384{HashSize::kD_384, Capacity::kC_768, Domain::kDomSHA3};
-const KeccParam kSHA3_512{HashSize::kD_512, Capacity::kC_1024, Domain::kDomSHA3};
-const KeccParam kSHAKE128(HashSize::kD_128, Capacity::kC_256, Domain::kDomSHAKE);
-const KeccParam kSHAKE256(HashSize::kD_256, Capacity::kC_512, Domain::kDomSHAKE);
+const KeccParam kSHA3_224{HashSize::kD_224, Domain::kDomSHA3};
+const KeccParam kSHA3_256{HashSize::kD_256, Domain::kDomSHA3};
+const KeccParam kSHA3_384{HashSize::kD_384, Domain::kDomSHA3};
+const KeccParam kSHA3_512{HashSize::kD_512, Domain::kDomSHA3};
+const KeccParam kSHAKE128(HashSize::kD_128, Domain::kDomSHAKE);
+const KeccParam kSHAKE256(HashSize::kD_256, Domain::kDomSHAKE);
 
 static const int_t k8Bits = 8;
 static constexpr int_t kIntSize = sizeof(int_t);
@@ -125,19 +120,21 @@ inline int_t rotl(int_t n, size_t offset) noexcept
 class Keccak
 {
 public:
-    Keccak() = delete;
     Keccak(const Keccak&) = delete;     // copy/move constructors in undef
     Keccak(const Keccak&&) = delete;
     Keccak& operator=(Keccak&) = delete; // copy/move assignment is undef
     Keccak& operator=(Keccak&&) = delete;
 
-    explicit Keccak(KeccParam param);
+    explicit Keccak(KeccParam param) {  setup(param);  }
+    Keccak() {  setup(kSHA3_256);  }     // by default SHA3-256
     ~Keccak() {};
 
     //------ Main Interface ------
+    virtual void setup(const KeccParam &param);
     std::vector<byte> get_digest(const char* msg, const size_t len_in_bits);
     std::vector<byte> get_digest(const std::string& msg, size_t len_in_bits)
                                      noexcept;  // wrapper function
+    void get_digest(std::string &msg, std::string &digest) noexcept;
     bool set_digest_size(const size_t digest_size_in_bits) noexcept;
     std::string get_hash_type() noexcept;
     size_t get_rate() const {  return (rate_); }
@@ -150,9 +147,10 @@ protected:
     }
     void keccak_p() noexcept;
     std::vector<byte> squeeze() noexcept;
+    void squeeze(std::string& digest) noexcept;
 
 private:
-    void absorb(const byte* start, const byte* end, size_t size) noexcept;
+    inline void absorb(const char* msg, const size_t len_in_bits) noexcept;
 
     //------ Class Data Members ------
 protected:
@@ -167,18 +165,29 @@ protected:
     size_t suf_len_;	// length in bits of the suffix
 };  // end for class "Keccak" declaration
 
-//-----------------------------
-Keccak::Keccak(KeccParam param)
-:   hash_size_(static_cast<size_t>(param.hash_size)),
-    capacity_(static_cast<size_t>(param.cap)),
-    domain_(static_cast<int_t>(param.dom))
+//----------------------------------------
+void Keccak::setup(const KeccParam &param)
 {
+    hash_size_ = static_cast<size_t>(param.hash_size);
+    capacity_ = hash_size_ * 2;
+    domain_ = static_cast<int_t>(param.dom);
     rate_ = kKeccakWidth - capacity_;
     if (Domain::kDomSHA3 == param.dom)
         suf_len_ = 2;
     else if (Domain::kDomSHAKE == param.dom)
         suf_len_ = 4;
-} // end Keccak()
+} // end setup(...)
+
+//-----------------------------------------------------------------------------
+std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
+{   // Return the digest of <msg>
+    if (!msg)
+        return (std::vector<byte>());
+    // 1. Absorbing
+    absorb(msg, len_in_bits);
+    // 2. Squeezing and return
+    return (squeeze());
+} // end get_digest(const char* msg,...)
 
 //----------------------------------------------------------
 std::vector<byte> Keccak::get_digest(const std::string& msg,
@@ -189,7 +198,17 @@ std::vector<byte> Keccak::get_digest(const std::string& msg,
     if(len_in_bits > msg.length()*k8Bits)
         len_in_bits = msg.length() * k8Bits;
     return (get_digest(msg.c_str(), len_in_bits));
-} // end get_digest()
+} // end get_digest(...)
+
+//---------------------------------------------------------------------
+void Keccak::get_digest(std::string &msg, std::string &digest) noexcept
+{
+    // 1. Absorbing
+    absorb(msg.c_str(), msg.length() * k8Bits);
+    // 2. Squeezing
+    squeeze(digest);
+    return;
+} // end get_digest(...)
 
 //-------------------------------------------------------------------
 bool Keccak::set_digest_size(const size_t hash_size_in_bits) noexcept
@@ -201,7 +220,7 @@ bool Keccak::set_digest_size(const size_t hash_size_in_bits) noexcept
     }
     else
         return (false);
-} // end set_digest_size()
+} // end set_digest_size(...)
 
 //------------------------------------------
 std::string Keccak::get_hash_type() noexcept
@@ -211,32 +230,6 @@ std::string Keccak::get_hash_type() noexcept
     hash_type += std::to_string(capacity_/2);
     return (hash_type);
 }
-
-//-----------------------------------------------------------------------------
-std::vector<byte> Keccak::get_digest(const char* msg, const size_t len_in_bits)
-{   // Return the digest of <msg> (UNSAFE! Memory control needed.)
-    // The caller must guarantee that the <msg> is available and valid
-    if(!msg)
-        return (std::vector<byte>());
-    // 0. Preparing
-    //      in PAD(10*1) obligatory add "11", i.e. two bits
-    size_t total_len = len_in_bits + suf_len_ + 2;
-    total_len += rate_ - (total_len % rate_);
-    reset_state();
-    // 1. Absorbing
-    const byte* cur = reinterpret_cast<const byte*>(msg);
-    size_t absorbed = 0;
-    for (size_t i = 0; i < total_len / rate_; i++) {
-        size_t block_size = std::min(len_in_bits - absorbed, rate_);
-        size_t offset = (block_size % k8Bits) ? (block_size/k8Bits + 1)
-                                              : (block_size/k8Bits);
-        absorb(cur, cur + offset, block_size);
-        cur += offset;
-        absorbed += rate_;
-    }
-    // 2. Squeezing and return
-    return (squeeze());
-} // end get_digest(const char* msg,...)
 
 //------------------------------
 void Keccak::keccak_p() noexcept
@@ -274,32 +267,84 @@ void Keccak::keccak_p() noexcept
     } // end for(size_t rc...)
 } // end keccak_p()
 
-//---------------------------------------------------------------------------
-void Keccak::absorb(const byte* start, const byte* end, size_t size) noexcept
-{   // Absorbing part of input [start, end] with State array
-    for (const byte* cur = start; cur != end; cur++) {
-        st_raw_[cur - start] ^= *cur;
-    }
-    if (size < rate_) {         // domain separation and padding
-        size_t cur_byte = size / k8Bits;
-        size_t cur_bit = size % k8Bits;
-        st_raw_[cur_byte] ^= domain_ << cur_bit;
-        int overflow = (cur_bit + suf_len_ + 1) - k8Bits;
-        if (overflow > 0) { // suffix appending over 64 bit boundary
-            st_raw_[cur_byte+1] ^= domain_ >> (suf_len_ + 1 -overflow);
+//---------------------------------------------------------------------
+void Keccak::absorb(const char* msg, const size_t len_in_bits) noexcept
+{
+    // Preparing
+    const size_t rate8 = rate_ / k8Bits;
+    //      in PAD(10*1) obligatory add "11", i.e. two bits
+    size_t total_len = len_in_bits + suf_len_ + 2;
+    total_len += (total_len % rate_) ? (rate_ - total_len % rate_) : 0;
+    //      let's deal with domain separation and padding
+    const size_t dom_byte = (len_in_bits / k8Bits);
+    const size_t dom_bit = len_in_bits % k8Bits;
+    const size_t dom_step = len_in_bits / rate_;
+    const int over = static_cast<int>(dom_bit + suf_len_ + 1 - k8Bits);
+    int dom_over_step = -1;
+    if (over > 0)      // suffix appending over 64 bit boundary
+        dom_over_step = static_cast<int>((len_in_bits + suf_len_ + 1) / rate_);
+    reset_state();
+    // Absorbing
+    const byte* cur = reinterpret_cast<const byte*>(msg);
+    size_t absorbed(0), block(0), offset(0);
+    for (size_t n(total_len / rate_), i(0); i < n; i++) {
+        block = std::min(len_in_bits - absorbed, rate_);
+        cur += offset;
+        offset = (block % k8Bits) ? (block / k8Bits + 1) : (block / k8Bits);
+        //absorb(cur, cur + offset);   // absorb but not padding
+        if (offset % (rate_ / k8Bits) == 0) {
+            const int_t* start = reinterpret_cast<const int_t*>(cur);
+            for (int i = 0; i < offset / kIntSize; i++)
+                st_[i] ^= *(start + i);
         }
-        // add last byte of padding
-        st_raw_[(rate_ / k8Bits) - 1] ^= 0x80;
+        else {
+            for (const byte* start = cur; start != (cur + offset); start++)
+                st_raw_[start - cur] ^= *start;
+        }
+        absorbed += block;
+        if (dom_step == i)
+            st_raw_[dom_byte % rate8] ^= domain_ << dom_bit;
+        if (dom_over_step == i)
+            st_raw_[(dom_byte + 1) % rate8] ^= domain_ >> (suf_len_ + 1 - over);
+        if (i == (n - 1))
+            st_raw_[rate8 - 1] ^= 0x80;  // add last byte of padding
+        keccak_p();
     }
-    keccak_p();
-} // end absorb()
+} // end absorb(...)
 
 //------------------------------------------
 std::vector<byte> Keccak::squeeze() noexcept
 {   // Squeezing's part of the "sponge" construction.
     // Getting the message digest (hash)
     size_t rem = hash_size_ % k8Bits;
-    std::vector<byte> digest(hash_size_/k8Bits + (rem ? 1 : 0), 0);
+    std::vector<byte> digest(hash_size_ / k8Bits + (rem ? 1 : 0), 0);
+    size_t squeezed = 0;
+    for (size_t i = 0; i < (hash_size_ / rate_ + 1); i++) {
+        size_t block_size = std::min((hash_size_ - squeezed), rate_);
+        if (block_size == rate_) {
+            int_t* cur = reinterpret_cast<int_t*>(digest.data()) + squeezed / k8Bits;
+            for (int i = 0; i < rate_ / kLaneSize; i++, cur++)
+                *cur = st_[i];
+        }
+        else {
+            for (size_t j = squeezed; j < squeezed + block_size; j += k8Bits)
+                digest[j / k8Bits] = st_raw_[(j - squeezed) / k8Bits];
+        }
+        squeezed += block_size;
+        if (squeezed < hash_size_)
+            keccak_p();
+    }
+    // If digest size in bits not multiple by 8
+    if (rem)
+        digest[digest.size() - 1] &= 0xFF >> (k8Bits - rem);
+    return(digest);
+} // end squeeze()
+
+//------------------------------------------------
+void Keccak::squeeze(std::string& digest) noexcept
+{
+    size_t rem = hash_size_ % k8Bits;
+    digest.resize(hash_size_/k8Bits + (rem ? 1 : 0), 0);
     size_t squeezed = 0;
     for (size_t i = 0; i < (hash_size_/rate_ + 1); i++) {
         size_t block_size = std::min((hash_size_ - squeezed), rate_);
@@ -309,10 +354,9 @@ std::vector<byte> Keccak::squeeze() noexcept
         if (squeezed < hash_size_)
             keccak_p();
     }
-    // If digest size in bits not multiple by 8
-    if(rem)
+    if (rem)       // If digest size in bits not multiple by 8
         digest[digest.size() - 1] &= 0xFF >> (k8Bits - rem);
-    return(digest);
+    return;
 } // end squeeze()
 //====== end for class "Keccak" definition ======
 
@@ -324,18 +368,21 @@ class IUFKeccak : public Keccak
     // multiple of 8 (i.e. byte-oriented messages)
     using str_const_iter = std::string::const_iterator;
 public:
-    IUFKeccak() = delete;
     IUFKeccak(const IUFKeccak&) = delete;    // copy/move constructors in undef
     IUFKeccak(const IUFKeccak&&) = delete;
     IUFKeccak& operator=(IUFKeccak&) = delete; // copy/move assignment is undef
     IUFKeccak& operator=(IUFKeccak&&) = delete;
 
     explicit IUFKeccak(KeccParam param)
-    : Keccak(param), rate_in_bytes_(this->rate_ / k8Bits), separator_(0)
+    :   Keccak(param), rate_in_bytes_(this->rate_ / k8Bits), separator_(0)
+    {  init();  }
+    IUFKeccak()
+    :   Keccak(kSHA3_256), rate_in_bytes_(this->rate_ / k8Bits), separator_(0)
     {  init();  }
     ~IUFKeccak() {}
 
     //------ Main Interface ------
+    virtual void setup(const KeccParam& param) override;
     void init() noexcept;
     size_t update(const char* data, const size_t size); // WARNING: UNSAFE!!!
     size_t update_fast(const char* data, const size_t size);
@@ -354,6 +401,13 @@ private:		// Class Data Members
     size_t byte_absorbed_;
     char   separator_;
 }; // end for class IUFKeccak declaration
+
+//-------------------------------------------
+void IUFKeccak::setup(const KeccParam& param)
+{
+    Keccak::setup(param);
+    rate_in_bytes_ = rate_ / k8Bits;
+} // end IUFKeccak::setup(...)
 
 //-----------------------------
 void IUFKeccak::init() noexcept
