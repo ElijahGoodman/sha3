@@ -82,15 +82,6 @@ The following example will try to get the message digest using the schema
 
 For `SHA3` class:
 
-   virtual void setup(const KeccParam &param);
-   std::vector<byte> get_digest(const char* msg, const size_t len_in_bits);
-   std::vector<byte> get_digest(const std::string& msg, size_t len_in_bits)
-                                    noexcept;  // wrapper function
-   void get_digest(std::string &msg, std::string &digest) noexcept;
-   bool set_digest_size(const size_t digest_size_in_bits) noexcept;
-   std::string get_hash_type() noexcept;
-   size_t get_rate() const {  return (rate_); }
-
   * `setup` - Setting the type of hash algorithm.
   * `get_digest(const char* msg, const size_t len_in_bits)` - Return the digest
   of the message as **vector** (length specifies in bits).
