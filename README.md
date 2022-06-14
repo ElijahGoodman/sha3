@@ -1,9 +1,9 @@
 # **Simple implementation of SHA3 hash algorithm**
 
 This simple C++ single-header implementation of the SHA-3 algorithm is based on FIPS 202
-[SHA-3 Standard: Permutation-Based Hash and Extendable-Output Functions](https://github.com)
+[SHA-3 Standard: Permutation-Based Hash and Extendable-Output Functions](https://csrc.nist.gov/publications/detail/fips/202/final)
 
-Implementation works correctly on little-endian x64 machines.
+Implementation works correctly on little-endian x86-64 architectures.
 
 ## Language features and tools
 
@@ -28,7 +28,9 @@ following aliases are used:
     using SHA3Param = KeccParam
 ```
 The first one - `SHA3` - is the base class, which provides a simple set of
-functions for getting a digest (hash) of a message.
+functions for getting a digest (hash) of a message. Among other things, it
+allows to get a digest of a message, the length of which is defined in bits
+(bit-aligned string).
 The second class - `SHA3_IUF` - inherits from the base class and extends
 the functionality by appending additional functions. In particular, `SHA3_IUF`
 provides the ability to use the IUF (Init/Update/Finalize) scheme to absorb
@@ -38,12 +40,8 @@ Structure `SHA3Param` is used to initialize objects of
 the specified classes. Instance of this class has the **SHA3-256** setup by default.
 All major SHA3 & SHAKE types are predefined as global constants:
 ```CPP
-    const SHA3Param kSHA3_224;
-    const SHA3Param kSHA3_256;
-    const SHA3Param kSHA3_384;
-    const SHA3Param kSHA3_512;
-    const SHA3Param kSHAKE128;
-    const SHA3Param kSHAKE256;
+    const SHA3Param kSHA3_224, kSHA3_256, kSHA3_384, kSHA3_512;
+    const SHA3Param kSHAKE128, kSHAKE256;
 ```
 
 ## Using
@@ -57,13 +55,14 @@ and then getting the digest of some string:
     std::string str = "I wanna hashing it up!";
     std::vector<chash::byte> digest = obj.get_digest(str, str.size());
 
-    auto hash = obj.get_digest("Use first 27 bits of me", 27);
+    auto hash = obj.get_digest("Use first 27 bits of me", 27); // length specified in bits
 ```
 The following example will try to get the message digest using the schema
 **Init / Update / Finalize** (e.g. with one of the XOF function SHAKE128):
 ```cpp
     std::string str = "I wanna hashing it up";
-    chash::SHA3_IUF obj(chash::kSHAKE128);       // "Initialize"
+    chash::SHA3_IUF obj;       // "Initialize" (SHA3-256 by default)
+    obj.setup(chash::kSHAKE128);  // setup to SHAKE128
     obj.set_digest_size(999);  // For XOFs ONLY: set the digest length (in bits!)
     obj.update(str);                             // "Update"
     std::cout << "Digest: " << obj << std::endl; // "Finalize" included
@@ -81,12 +80,29 @@ The following example will try to get the message digest using the schema
 
 ## API features
 
-For `SHA3_IUF` objects:
+For `SHA3` class:
 
-  * `get_digest` - Return the digest of the message as `std::vector<unsigned char>`.
+   virtual void setup(const KeccParam &param);
+   std::vector<byte> get_digest(const char* msg, const size_t len_in_bits);
+   std::vector<byte> get_digest(const std::string& msg, size_t len_in_bits)
+                                    noexcept;  // wrapper function
+   void get_digest(std::string &msg, std::string &digest) noexcept;
+   bool set_digest_size(const size_t digest_size_in_bits) noexcept;
+   std::string get_hash_type() noexcept;
+   size_t get_rate() const {  return (rate_); }
+
+  * `setup` - Setting the type of hash algorithm.
+  * `get_digest(const char* msg, const size_t len_in_bits)` - Return the digest
+  of the message as **vector** (length specifies in bits).
+  * `get_digest(const std::string &msg, size_t len_in_bits)` - Wrapper-function.
+  The message is presents as **string**.
+  * `get_digest(std::string &msg, std::string &digest)` - The function calculates
+  the digest of **msg** and stores result in **digest**.
   * `set_digest_size` - For XOFs only: set the length of digest (***in bits!***).
-  * `get_hash_type` - Return the string like *'SHA3-256'*.
+  * `get_hash_type` - Return the string like *'SHA3-256'* or *'SHAKE128'*.
   * `get_rate` - Return **rate** value (***in bits!***).
+
+For `SHA3_IUF` class:
 
   * `init` - Initialize the object; current **State** is reset to zero.
   * `update` - Update **State** with new data.
@@ -118,7 +134,7 @@ For `SHA3_IUF` objects:
     obj.update_fast(block.c_str(), block.size());
     std::cout << "Digest=" << obj << "\n";
 ```
-  * The `test_sha3.cpp` file is a simple test app to verify that the main
+  * The `tests/test_sha3.cpp` file is a simple test app to verify that the main
   interface works correctly.
 
 ## SHA3MD
@@ -138,6 +154,12 @@ Displaying an empty string digest:
 
     $ echo -n "" | ./sha3md -shake128 -len 64 -sep ":" -u
     SHAKE128(stdin)= 7F:9C:2B:A4:E8:8F:82:7D:61:60:45:50:76:05:85:3E
+
+## CAVP Testing
+
+File `tests/valid_sys.cpp` contains tests based on
+[Cryptographic Algorithm Validation Program](https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program/secure-hashing).
+
 ## Conclusion.
 
 I would like to hope that this implementation will be useful to someone.
